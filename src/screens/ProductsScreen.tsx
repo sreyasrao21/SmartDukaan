@@ -17,6 +17,7 @@ import {
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -341,7 +342,7 @@ export default function ProductsScreen() {
           },
         },
         {
-          text: 'Choose from Library',
+          text: 'Choose Image from Gallery',
           onPress: async () => {
             const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
             if (status !== 'granted') {
@@ -354,6 +355,23 @@ export default function ProductsScreen() {
             });
             if (!result.canceled && result.assets && result.assets.length > 0) {
               processScannedBill();
+            }
+          },
+        },
+        {
+          text: 'Upload PDF Document',
+          onPress: async () => {
+            try {
+              const result = await DocumentPicker.getDocumentAsync({
+                type: ['application/pdf', 'image/*'],
+                copyToCacheDirectory: true,
+              });
+              if (!result.canceled && result.assets && result.assets.length > 0) {
+                processScannedBill();
+              }
+            } catch (err) {
+              console.error('Failed to select document:', err);
+              addToast('Failed to select document', 'error');
             }
           },
         },
