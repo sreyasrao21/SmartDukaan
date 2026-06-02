@@ -139,11 +139,20 @@ export default function ProductsScreen() {
   const [showSupplierBills, setShowSupplierBills] = useState(false);
   const [activeSupplierTab, setActiveSupplierTab] = useState<'Scan' | 'Manual' | 'History'>('Scan');
   const [isOcrScanning, setIsOcrScanning] = useState(false);
-  const [scannedResultModal, setScannedResultModal] = useState<{
-    invoiceId: string;
-    supplier: string;
-    items: { name: string; qty: number; unit: string }[];
-  } | null>(null);
+
+  // High-Fidelity OCR Review States
+  interface OcrItem {
+    id: string;
+    name: string;
+    qty: number;
+    unit: string;
+    total: number;
+    costPrice: number;
+    sellPrice: number;
+  }
+  const [ocrScannedItems, setOcrScannedItems] = useState<OcrItem[]>([]);
+  const [showOcrReview, setShowOcrReview] = useState(false);
+  const [isProcessingOcr, setIsProcessingOcr] = useState(false);
 
   const [supplierBillHistory, setSupplierBillHistory] = useState([
     {
@@ -354,51 +363,152 @@ export default function ProductsScreen() {
     setTimeout(async () => {
       setIsOcrScanning(false);
       
-      const curdChange = 10;
-      const toorChange = 15;
-      
-      const matchedCurd = products.find(p => p.name.toLowerCase().includes('curd'));
-      const matchedToor = products.find(p => p.name.toLowerCase().includes('toor'));
-      
-      try {
-        if (matchedCurd) {
-          await productApi.update(matchedCurd._id, {
-            price: matchedCurd.price,
-            stock: matchedCurd.stock + curdChange,
+      setOcrScannedItems([
+        { id: 'ocr-1', name: 'Sona Masuri Rice', qty: 1, unit: 'KG', total: 60, costPrice: 60, sellPrice: 63 },
+        { id: 'ocr-2', name: 'Dalia', qty: 1, unit: 'KG', total: 65, costPrice: 65, sellPrice: 68 },
+        { id: 'ocr-3', name: 'Toor Dal', qty: 1, unit: 'KG', total: 165, costPrice: 165, sellPrice: 173 },
+        { id: 'ocr-4', name: 'Chana Dal', qty: 1, unit: 'KG', total: 95, costPrice: 95, sellPrice: 100 },
+      ]);
+      setShowOcrReview(true);
+      addToast('Bill digitized successfully! Ready for review.', 'success');
+    }, 2500);
+  };
+
+  const handleUpdateOcrItemField = (id: string, field: keyof OcrItem, value: any) => {
+    setOcrScannedItems(prev =>
+      prev.map(item => {
+        if (item.id !== id) return item;
+        
+        let parsedVal = value;
+        if (field === 'qty') {
+          parsedVal = parseInt(value, 10);
+          if (isNaN(parsedVal)) parsedVal = 0;
+        } else if (field === 'costPrice') {
+          parsedVal = parseFloat(value);
+          if (isNaN(parsedVal)) parsedVal = 0;
+        } else if (field === 'sellPrice') {
+          parsedVal = parseFloat(value);
+          if (isNaN(parsedVal)) parsedVal = 0;
+        }
+
+        const updated = { ...item, [field]: parsedVal };
+        if (field === 'qty' || field === 'costPrice') {
+          updated.total = updated.qty * updated.costPrice;
+        }
+        return updated;
+      })
+    );
+  };
+
+  const handleDeleteOcrItem = (id: string) => {
+    setOcrScannedItems(prev => prev.filter(item => item.id !== id));
+  };
+
+  const handleClearAllOcrItems = () => {
+    setOcrScannedItems([]);
+  };
+
+  const handleAddNewOcrItem = () => {
+    const newId = `ocr-new-${Date.now()}`;
+    setOcrScannedItems(prev => [
+      ...prev,
+      {
+        id: newId,
+        name: 'New Product',
+        qty: 1,
+        unit: 'KG',
+        total: 0,
+        costPrice: 0,
+        sellPrice: 0,
+      },
+    ]);
+  };
+
+  const handleProcessOcrItems = async () => {
+    if (ocrScannedItems.length === 0) {
+      Alert.alert('No Items', 'There are no items to process.');
+      return;
+    }
+
+    setIsProcessingOcr(true);
+    try {
+      // Loop through all items and update database
+      for (const item of ocrScannedItems) {
+        // Search if product already exists
+        const matched = products.find(p => p.name.toLowerCase().trim() === item.name.toLowerCase().trim());
+        if (matched) {
+          // Update existing product
+          await productApi.update(matched._id, {
+            price: item.sellPrice,
+            costPrice: item.costPrice,
+            stock: matched.stock + item.qty,
+          });
+        } else {
+          // Determine appropriate category and icon
+          let category = 'Grains';
+          let icon = '🌾';
+          const nameLower = item.name.toLowerCase();
+          if (nameLower.includes('rice')) {
+            category = 'Grains';
+            icon = '🌾';
+          } else if (nameLower.includes('dal')) {
+            category = 'Pulses';
+            icon = '🥣';
+          } else if (nameLower.includes('dalia')) {
+            category = 'Breakfast';
+            icon = '🌾';
+          } else if (nameLower.includes('oil')) {
+            category = 'Oil';
+            icon = '🛢️';
+          } else if (nameLower.includes('salt')) {
+            category = 'Spices';
+            icon = '🧂';
+          }
+
+          // Create new product
+          await productApi.create({
+            name: item.name,
+            price: item.sellPrice,
+            costPrice: item.costPrice,
+            stock: item.qty,
+            unit: item.unit.toLowerCase(),
+            category,
+            icon,
           });
         }
-        if (matchedToor) {
-          await productApi.update(matchedToor._id, {
-            price: matchedToor.price,
-            stock: matchedToor.stock + toorChange,
-          });
-        }
-        loadProducts();
-      } catch (err) {
-        console.error('Failed to sync scanned stock quantities:', err);
       }
 
-      const nextBillNo = supplierBillHistory.length + 1;
+      // Reload products list
+      await loadProducts();
+
+      // Create new bill entry for History list
+      const totalBillCost = ocrScannedItems.reduce((acc, item) => acc + item.total, 0);
+      const itemsSummaryText = ocrScannedItems
+        .map(item => `${item.name} +${item.qty} ${item.unit.toLowerCase()}`)
+        .join(', ');
+
+      const nextBillNo = supplierBillHistory.length + 1001; // e.g. SB-1002
       const newBill = {
-        id: `SB-100${nextBillNo}`,
-        invoiceId: `Invoice #SB-100${nextBillNo}`,
+        id: `SB-${nextBillNo}`,
+        invoiceId: `Invoice #SB-${nextBillNo}`,
         supplier: 'Balaji Wholesale Foods',
-        date: 'Today, 7:32 PM',
-        itemsSummary: 'Curd (Loose) +10 kg, Toor Dal +15 kg',
-        totalValue: '₹3,275',
+        date: 'Today, ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        itemsSummary: itemsSummaryText.length > 40 ? itemsSummaryText.substring(0, 37) + '...' : itemsSummaryText,
+        totalValue: `₹${totalBillCost.toLocaleString()}`,
       };
-      
+
       setSupplierBillHistory(prev => [newBill, ...prev]);
-      setScannedResultModal({
-        invoiceId: newBill.invoiceId,
-        supplier: newBill.supplier,
-        items: [
-          { name: 'Curd (Loose)', qty: curdChange, unit: 'kg' },
-          { name: 'Toor Dal', qty: toorChange, unit: 'kg' },
-        ],
-      });
-      addToast('Bill digitized successfully!', 'success');
-    }, 2500);
+
+      // Complete flow
+      setShowOcrReview(false);
+      setActiveSupplierTab('History');
+      addToast('Reviewed stock registered in live inventory!', 'success');
+    } catch (err: any) {
+      console.error('Failed to process OCR items:', err);
+      Alert.alert('Processing Failed', 'An error occurred while saving the inventory items.');
+    } finally {
+      setIsProcessingOcr(false);
+    }
   };
 
   // List Header with Catalog Size Card
@@ -745,46 +855,164 @@ export default function ProductsScreen() {
           {/* OCR Document Scanner Visual Loading Indicator */}
           {isOcrScanning && (
             <View style={[StyleSheet.absoluteFill, s.loaderOverlay, { zIndex: 10000 }]}>
-              <View style={[s.loaderCard, { backgroundColor: isDark ? '#1E293B' : '#FFFFFF' }]}>
-                <ActivityIndicator size="large" color="#FF7E06" />
-                <Text style={[s.loaderText, { color: isDark ? '#FFFFFF' : '#1E293B' }]}>Processing Bill using AI OCR...</Text>
-                <Text style={s.loaderSubtext}>Analyzing text, quantities, and prices</Text>
+              <View style={[s.loaderCard, { backgroundColor: '#1A2333', paddingVertical: 40 }]}>
+                <ActivityIndicator size="large" color="#10B981" style={{ marginBottom: 16 }} />
+                
+                <Text style={[s.loaderText, { color: '#FFFFFF', fontSize: 20, fontWeight: '800' }]}>
+                  Analyzing bill with AI...
+                </Text>
+                
+                <Text style={[s.loaderSubtext, { color: '#94A3B8', fontSize: 13, marginTop: 4 }]}>
+                  Processing with OCR AI...
+                </Text>
+                
+                <View style={s.loaderProgressBarBg}>
+                  <View style={s.loaderProgressBarFill} />
+                </View>
               </View>
             </View>
           )}
 
-          {/* Bill Digitized Success Modal Sheet */}
-          {scannedResultModal !== null && (
+          {/* High-Fidelity OCR Review Overlay Sheet */}
+          {showOcrReview && (
             <View style={[StyleSheet.absoluteFill, s.loaderOverlay, { zIndex: 10000 }]}>
               <TouchableOpacity
                 style={StyleSheet.absoluteFillObject}
                 activeOpacity={1}
-                onPress={() => setScannedResultModal(null)}
+                onPress={() => setShowOcrReview(false)}
               />
-              <View style={[s.successCard, { backgroundColor: isDark ? '#1E293B' : '#FFFFFF' }]}>
-                <View style={s.successIconBox}>
-                  <MaterialCommunityIcons name="check-circle" size={48} color="#10B981" />
-                </View>
-                <Text style={[s.successTitle, { color: isDark ? '#FFFFFF' : '#1E293B' }]}>Bill Digitized Successfully!</Text>
-                <Text style={s.successInvoiceId}>{scannedResultModal.invoiceId}</Text>
-                <Text style={s.successSupplier}>Supplier: {scannedResultModal.supplier}</Text>
-                
-                <View style={[s.scannedItemsList, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(148,163,184,0.06)' }]}>
-                  <Text style={s.scannedItemsTitle}>ITEMS DETECTED & ADDED:</Text>
-                  {scannedResultModal.items.map((item, idx) => (
-                    <View key={idx} style={s.scannedItemRow}>
-                      <Text style={[s.scannedItemName, { color: isDark ? '#F1F5F9' : '#334155' }]}>{item.name}</Text>
-                      <Text style={s.scannedItemQty}>+{item.qty} {item.unit}</Text>
-                    </View>
-                  ))}
+              
+              <View style={[s.reviewCard, { backgroundColor: '#1A2333' }]}>
+                {/* Header Row */}
+                <View style={s.reviewHeaderRow}>
+                  <View style={s.reviewTitleGroup}>
+                    <Text style={s.reviewTitleText}>Review Items</Text>
+                    <Text style={s.reviewCountBadge}>{ocrScannedItems.length} items</Text>
+                  </View>
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={handleClearAllOcrItems}
+                    style={s.clearAllBtn}
+                  >
+                    <Text style={s.clearAllBtnText}>CLEAR ALL</Text>
+                  </TouchableOpacity>
                 </View>
 
-                <TouchableOpacity
-                  style={s.successCloseBtn}
-                  onPress={() => setScannedResultModal(null)}
-                >
-                  <Text style={s.successCloseBtnText}>Close & Update Stock</Text>
-                </TouchableOpacity>
+                {/* Spreadsheet Table Headers */}
+                <View style={s.tableHeaderRow}>
+                  <Text style={[s.headerCell, s.cellProduct]}>PRODUCT</Text>
+                  <Text style={[s.headerCell, s.cellQty]}>QTY</Text>
+                  <Text style={[s.headerCell, s.cellUnit]}>UNIT</Text>
+                  <Text style={[s.headerCell, s.cellTotal]}>TOTAL</Text>
+                  <Text style={[s.headerCell, s.cellCost]}>COST/UNIT</Text>
+                  <Text style={[s.headerCell, s.cellSell]}>SELL/UNIT</Text>
+                  <View style={s.cellDeleteHeader} />
+                </View>
+
+                {/* Spreadsheet Table Body */}
+                <ScrollView style={s.tableScroll} contentContainerStyle={s.tableScrollContent} keyboardShouldPersistTaps="handled">
+                  {ocrScannedItems.map((item) => (
+                    <View key={item.id} style={s.tableRow}>
+                      {/* PRODUCT NAME (Editable TextInput) */}
+                      <TextInput
+                        style={[s.rowInputText, s.cellProduct]}
+                        value={item.name}
+                        onChangeText={(text) => handleUpdateOcrItemField(item.id, 'name', text)}
+                        placeholder="Product Name"
+                        placeholderTextColor="rgba(255,255,255,0.3)"
+                      />
+
+                      {/* QTY (Editable TextInput) */}
+                      <TextInput
+                        style={[s.rowInputNumberCenter, s.cellQty]}
+                        value={item.qty.toString()}
+                        onChangeText={(text) => handleUpdateOcrItemField(item.id, 'qty', text)}
+                        keyboardType="numeric"
+                      />
+
+                      {/* UNIT badge */}
+                      <View style={[s.cellUnit, s.unitBadgeContainer]}>
+                        <View style={s.unitBadge}>
+                          <Text style={s.unitBadgeText}>{item.unit.toUpperCase()}</Text>
+                        </View>
+                      </View>
+
+                      {/* TOTAL cost */}
+                      <View style={[s.cellTotal, s.totalValueContainer]}>
+                        <Text style={s.currencyLabelSmall}>₹</Text>
+                        <Text style={s.totalValueText}>{item.total}</Text>
+                      </View>
+
+                      {/* COST/UNIT (Editable TextInput) */}
+                      <View style={[s.cellCost, s.costValueContainer]}>
+                        <Text style={s.currencyLabelSmallCost}>₹</Text>
+                        <TextInput
+                          style={s.rowInputNumberRight}
+                          value={item.costPrice.toString()}
+                          onChangeText={(text) => handleUpdateOcrItemField(item.id, 'costPrice', text)}
+                          keyboardType="numeric"
+                        />
+                      </View>
+
+                      {/* SELL/UNIT (Editable bordered input box) */}
+                      <View style={[s.cellSell, s.sellInputContainer]}>
+                        <View style={s.sellInputBoxWrapper}>
+                          <Text style={s.sellInputRupee}>₹</Text>
+                          <TextInput
+                            style={s.sellInputBox}
+                            value={item.sellPrice.toString()}
+                            onChangeText={(text) => handleUpdateOcrItemField(item.id, 'sellPrice', text)}
+                            keyboardType="numeric"
+                          />
+                        </View>
+                      </View>
+
+                      {/* Delete button */}
+                      <TouchableOpacity
+                        activeOpacity={0.7}
+                        onPress={() => handleDeleteOcrItem(item.id)}
+                        style={s.rowDeleteBtn}
+                      >
+                        <MaterialCommunityIcons name="close" size={18} color="#94A3B8" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+
+                  {ocrScannedItems.length === 0 && (
+                    <View style={s.emptyReviewState}>
+                      <MaterialCommunityIcons name="clipboard-alert-outline" size={48} color="#64748B" />
+                      <Text style={s.emptyReviewText}>No items to review. Click below to add one.</Text>
+                    </View>
+                  )}
+                </ScrollView>
+
+                {/* Bottom Action Footer Row */}
+                <View style={s.reviewFooterRow}>
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={handleAddNewOcrItem}
+                    style={s.addOcrItemBtn}
+                  >
+                    <MaterialCommunityIcons name="plus" size={18} color="#3B82F6" />
+                    <Text style={s.addOcrItemBtnText}>Add Item</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={handleProcessOcrItems}
+                    style={s.processOcrBtn}
+                    disabled={isProcessingOcr}
+                  >
+                    {isProcessingOcr ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <>
+                        <MaterialCommunityIcons name="file-document-outline" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                        <Text style={s.processOcrBtnText}>PROCESS</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
           )}
@@ -1887,5 +2115,284 @@ const s = StyleSheet.create({
   actionSheetCancelText: {
     fontSize: 13,
     fontWeight: '700',
+  },
+
+  // OCR Progress Loader Styles
+  loaderProgressBarBg: {
+    width: '80%',
+    height: 6,
+    backgroundColor: '#334155',
+    borderRadius: 3,
+    marginTop: 20,
+    overflow: 'hidden',
+  },
+  loaderProgressBarFill: {
+    width: '25%',
+    height: '100%',
+    backgroundColor: '#10B981',
+  },
+
+  // High-Fidelity Spreadsheet Review Card Styles
+  reviewCard: {
+    width: '95%',
+    maxWidth: 680,
+    borderRadius: 24,
+    padding: 20,
+    maxHeight: '80%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  reviewHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  reviewTitleGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  reviewTitleText: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  reviewCountBadge: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '600',
+    marginLeft: 8,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  clearAllBtn: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: '#EF4444',
+  },
+  clearAllBtnText: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#EF4444',
+  },
+  tableHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
+    marginBottom: 4,
+  },
+  headerCell: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#64748B',
+    letterSpacing: 0.5,
+  },
+  tableScroll: {
+    flexGrow: 0,
+  },
+  tableScrollContent: {
+    paddingBottom: 10,
+  },
+  tableRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.04)',
+    minHeight: 48,
+  },
+  cellProduct: {
+    flex: 2.2,
+    marginRight: 6,
+  },
+  cellQty: {
+    flex: 0.8,
+  },
+  cellUnit: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cellTotal: {
+    flex: 1.1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cellCost: {
+    flex: 1.4,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  cellSell: {
+    flex: 1.8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cellDeleteHeader: {
+    width: 32,
+  },
+  rowInputText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    padding: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  rowInputNumberCenter: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    padding: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  unitBadgeContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  unitBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  unitBadgeText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#94A3B8',
+  },
+  totalValueContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+  },
+  totalValueText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  currencyLabelSmall: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#94A3B8',
+    marginLeft: 2,
+    marginTop: -2,
+  },
+  costValueContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  rowInputNumberRight: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    textAlign: 'right',
+    padding: 0,
+    width: 40,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  currencyLabelSmallCost: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#94A3B8',
+    marginRight: 2,
+  },
+  sellInputContainer: {
+    paddingHorizontal: 4,
+    width: '100%',
+  },
+  sellInputBoxWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 28,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 126, 6, 0.6)',
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    width: '100%',
+  },
+  sellInputRupee: {
+    color: '#FF7E06',
+    fontSize: 11,
+    fontWeight: '800',
+    marginRight: 2,
+  },
+  sellInputBox: {
+    flex: 1,
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+    padding: 0,
+  },
+  rowDeleteBtn: {
+    width: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyReviewState: {
+    padding: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyReviewText: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  reviewFooterRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.06)',
+    paddingTop: 12,
+  },
+  addOcrItemBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  addOcrItemBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#3B82F6',
+  },
+  processOcrBtn: {
+    backgroundColor: '#2E7D32',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#2E7D32',
+    shadowOpacity: 0.3,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  processOcrBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
   },
 });
