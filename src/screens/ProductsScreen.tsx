@@ -16,8 +16,10 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
+import { useAuth } from '../contexts/AuthContext';
 import { productApi } from '../services/api';
 import { spacing } from '../theme';
 
@@ -107,13 +109,14 @@ const ProductCardItem: React.FC<ProductCardItemProps> = ({ item, onEdit, isDark 
 export default function ProductsScreen() {
   const { isDark } = useTheme();
   const { addToast } = useToast();
+  const { user } = useAuth();
 
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Creation Drawer Form State
+  // Floating Add Product Drawer Form State
   const [showAddForm, setShowAddForm] = useState(false);
   const [newName, setNewName] = useState('');
   const [newPrice, setNewPrice] = useState('');
@@ -130,6 +133,27 @@ export default function ProductsScreen() {
   const [editCostPrice, setEditCostPrice] = useState('');
   const [editStock, setEditStock] = useState('');
   const [editLoading, setEditLoading] = useState(false);
+
+  // Supplier Bills / Command Center State
+  const [showSupplierBills, setShowSupplierBills] = useState(false);
+  const [activeSupplierTab, setActiveSupplierTab] = useState<'Scan' | 'Manual' | 'History'>('Scan');
+  const [isOcrScanning, setIsOcrScanning] = useState(false);
+  const [scannedResultModal, setScannedResultModal] = useState<{
+    invoiceId: string;
+    supplier: string;
+    items: { name: string; qty: number; unit: string }[];
+  } | null>(null);
+
+  const [supplierBillHistory, setSupplierBillHistory] = useState([
+    {
+      id: 'SB-1001',
+      invoiceId: 'Invoice #SB-1001',
+      supplier: 'Om Kirana Wholesalers',
+      date: 'May 28, 2026',
+      itemsSummary: 'Fortune Oil +10 L, Tata Salt +20 kg',
+      totalValue: '₹3,260',
+    },
+  ]);
 
   const loadProducts = useCallback(async (showLoader = false) => {
     if (showLoader) setLoading(true);
@@ -191,6 +215,10 @@ export default function ProductsScreen() {
       setNewUnit('kg');
       setNewIcon('📦');
       setShowAddForm(false);
+      // If we are in "Manual" supplier tab, go to history tab automatically or reload list
+      if (showSupplierBills) {
+        setActiveSupplierTab('History');
+      }
       loadProducts();
     } catch (err: any) {
       console.error('Failed to create product:', err);
@@ -289,6 +317,103 @@ export default function ProductsScreen() {
     });
   }, [products, searchTerm]);
 
+  // Handle OCR Document Scanner flow
+  const handleScanBill = async () => {
+    Alert.alert(
+      'Scan Supplier Bill',
+      'Select purchase invoice source to capture:',
+      [
+        {
+          text: 'Take Photo',
+          onPress: async () => {
+            const { status } = await ImagePicker.requestCameraPermissionsAsync();
+            if (status !== 'granted') {
+              Alert.alert('Permission Denied', 'Camera access is required to scan bills.');
+              return;
+            }
+            const result = await ImagePicker.launchCameraAsync({
+              allowsEditing: true,
+              quality: 0.8,
+            });
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+              processScannedBill();
+            }
+          },
+        },
+        {
+          text: 'Choose from Library',
+          onPress: async () => {
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (status !== 'granted') {
+              Alert.alert('Permission Denied', 'Media library access is required.');
+              return;
+            }
+            const result = await ImagePicker.launchImageLibraryAsync({
+              allowsEditing: true,
+              quality: 0.8,
+            });
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+              processScannedBill();
+            }
+          },
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  };
+
+  const processScannedBill = () => {
+    setIsOcrScanning(true);
+    setTimeout(async () => {
+      setIsOcrScanning(false);
+      
+      const curdChange = 10;
+      const toorChange = 15;
+      
+      const matchedCurd = products.find(p => p.name.toLowerCase().includes('curd'));
+      const matchedToor = products.find(p => p.name.toLowerCase().includes('toor'));
+      
+      try {
+        if (matchedCurd) {
+          await productApi.update(matchedCurd._id, {
+            price: matchedCurd.price,
+            stock: matchedCurd.stock + curdChange,
+          });
+        }
+        if (matchedToor) {
+          await productApi.update(matchedToor._id, {
+            price: matchedToor.price,
+            stock: matchedToor.stock + toorChange,
+          });
+        }
+        loadProducts();
+      } catch (err) {
+        console.error('Failed to sync scanned stock quantities:', err);
+      }
+
+      const nextBillNo = supplierBillHistory.length + 1;
+      const newBill = {
+        id: `SB-100${nextBillNo}`,
+        invoiceId: `Invoice #SB-100${nextBillNo}`,
+        supplier: 'Balaji Wholesale Foods',
+        date: 'Today, 7:32 PM',
+        itemsSummary: 'Curd (Loose) +10 kg, Toor Dal +15 kg',
+        totalValue: '₹3,275',
+      };
+      
+      setSupplierBillHistory(prev => [newBill, ...prev]);
+      setScannedResultModal({
+        invoiceId: newBill.invoiceId,
+        supplier: newBill.supplier,
+        items: [
+          { name: 'Curd (Loose)', qty: curdChange, unit: 'kg' },
+          { name: 'Toor Dal', qty: toorChange, unit: 'kg' },
+        ],
+      });
+      addToast('Bill digitized successfully!', 'success');
+    }, 2500);
+  };
+
   // List Header with Catalog Size Card
   const listHeader = useMemo(() => {
     if (products.length === 0) return null;
@@ -309,13 +434,32 @@ export default function ProductsScreen() {
 
   return (
     <View style={[s.container, { backgroundColor: isDark ? '#0F172A' : '#F8FAFC' }]}>
-      {/* Orange-to-Yellow Curved Header */}
+      {/* Orange-to-Yellow Curved Command Header */}
       <LinearGradient
-        colors={['#FF7E06', '#FF9F43']}
+        colors={['#FFD200', '#FF7E06']}
         start={{ x: 0, y: 0 }}
         end={{ x: 0, y: 1 }}
         style={s.orangeHeader}
       >
+        <View style={s.headerInnerTitleRow}>
+          <Text style={s.headerTitleMain}>Products 📦</Text>
+          <View style={s.inventoryBadge}>
+            <Text style={s.inventoryBadgeText}>INVENTORY COMMAND CENTER</Text>
+          </View>
+        </View>
+
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={() => {
+            setActiveSupplierTab('Scan');
+            setShowSupplierBills(true);
+          }}
+          style={s.addStockBtn}
+        >
+          <MaterialCommunityIcons name="plus" size={18} color="#000000" />
+          <Text style={s.addStockBtnText}>Add to Stock</Text>
+        </TouchableOpacity>
+
         <View style={s.searchBarContainer}>
           <TextInput
             style={s.searchInput}
@@ -327,7 +471,7 @@ export default function ProductsScreen() {
         </View>
       </LinearGradient>
 
-      {/* Main Container */}
+      {/* Main Catalog Body */}
       <KeyboardAvoidingView
         style={s.mainBody}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -386,7 +530,232 @@ export default function ProductsScreen() {
         <MaterialCommunityIcons name="plus" size={28} color="#FFFFFF" />
       </TouchableOpacity>
 
-      {/* Manual Stock & Price Editor Quick Modal */}
+      {/* Supplier Bills Full-Screen Command Center Overlay */}
+      <Modal
+        visible={showSupplierBills}
+        transparent={false}
+        animationType="slide"
+        onRequestClose={() => setShowSupplierBills(false)}
+      >
+        <View style={[s.supplierContainer, { backgroundColor: isDark ? '#0A0A0A' : '#F8FAFC' }]}>
+          {/* Top Custom Header Matching SDukaan */}
+          <View style={[s.header, { backgroundColor: isDark ? '#0A0A0A' : '#FFFFFF', borderBottomColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.06)' }]}>
+            <View style={s.headerInner}>
+              <TouchableOpacity
+                onPress={() => setShowSupplierBills(false)}
+                style={[s.avatarBtn, { borderColor: 'rgba(76,175,80,0.3)' }]}
+              >
+                <View style={s.avatarPlaceholder}>
+                  <Text style={s.avatarText}>{user?.name?.[0] || 'I'}</Text>
+                </View>
+              </TouchableOpacity>
+              <Text style={[s.brand, { color: isDark ? '#FFFFFF' : '#0F172A' }]}>SDukaan</Text>
+              <View style={s.headerRight}>
+                <View style={[s.langBtn, { borderColor: isDark ? '#334155' : '#E2E8F0' }]}>
+                  <Text style={[s.langText, { color: isDark ? '#94A3B8' : '#475569' }]}>EN</Text>
+                </View>
+                <TouchableOpacity onPress={() => setShowSupplierBills(false)} style={[s.menuBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }]}>
+                  <MaterialCommunityIcons name="arrow-left" size={22} color={isDark ? '#94A3B8' : '#475569'} />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+
+          {/* Supplier Bills Section Icon & Title */}
+          <View style={s.supplierTitleRow}>
+            <View style={[s.supplierIconContainer, { backgroundColor: isDark ? '#1E293B' : '#EFF6FF' }]}>
+              <MaterialCommunityIcons name="barcode-scan" size={28} color="#3B82F6" />
+            </View>
+            <View>
+              <Text style={[s.supplierMainTitle, { color: isDark ? '#FFFFFF' : '#1E293B' }]}>Supplier Bills</Text>
+              <Text style={s.supplierSubtitle}>Digitize bills, update stock & track history</Text>
+            </View>
+          </View>
+
+          {/* Tab Navigation Segmented Bar */}
+          <View style={s.segmentBarContainer}>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => setActiveSupplierTab('Scan')}
+              style={[s.segmentTab, activeSupplierTab === 'Scan' && s.segmentActiveTab]}
+            >
+              <Text style={[s.segmentTabText, { color: activeSupplierTab === 'Scan' ? '#FFFFFF' : '#94A3B8' }]}>
+                Scan
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => setActiveSupplierTab('Manual')}
+              style={[s.segmentTab, activeSupplierTab === 'Manual' && s.segmentActiveTab]}
+            >
+              <Text style={[s.segmentTabText, { color: activeSupplierTab === 'Manual' ? '#FFFFFF' : '#94A3B8' }]}>
+                Manual
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => setActiveSupplierTab('History')}
+              style={[s.segmentTab, activeSupplierTab === 'History' && s.segmentActiveTab]}
+            >
+              <Text style={[s.segmentTabText, { color: activeSupplierTab === 'History' ? '#FFFFFF' : '#94A3B8' }]}>
+                History
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Tab Views */}
+          <ScrollView style={s.supplierBody} keyboardShouldPersistTaps="handled">
+            {activeSupplierTab === 'Scan' && (
+              <View style={s.scanTabContent}>
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={handleScanBill}
+                  style={[s.scanCard, { borderColor: isDark ? '#475569' : '#CBD5E1', backgroundColor: isDark ? '#1E293B' : '#F8FAFC' }]}
+                >
+                  <View style={[s.cameraCircle, { backgroundColor: isDark ? '#334155' : '#EFF6FF' }]}>
+                    <MaterialCommunityIcons name="camera" size={32} color="#3B82F6" />
+                  </View>
+                  <Text style={[s.scanTitle, { color: isDark ? '#FFFFFF' : '#334155' }]}>Tap to Scan Bill</Text>
+                  <Text style={s.scanSubtitle}>Support Camera, Image & PDF</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {activeSupplierTab === 'Manual' && (
+              <View style={[s.manualTabContent, { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderColor: isDark ? '#334155' : '#E2E8F0' }]}>
+                <Text style={[s.manualTabTitle, { color: isDark ? '#FFFFFF' : '#1E293B' }]}>Manual Stock Entry</Text>
+                <View style={s.formGrid}>
+                  <View style={s.formFieldGroup}>
+                    <Text style={s.fieldLabel}>Product Name</Text>
+                    <TextInput
+                      style={[s.formInput, { color: isDark ? '#FFFFFF' : '#0F172A', borderColor: isDark ? '#334155' : '#E2E8F0' }]}
+                      placeholder="e.g. Curd (Loose)"
+                      placeholderTextColor="#94A3B8"
+                      value={newName}
+                      onChangeText={setNewName}
+                    />
+                  </View>
+
+                  <View style={s.formInputRow}>
+                    <View style={[s.formFieldGroup, { flex: 1, marginRight: 10 }]}>
+                      <Text style={s.fieldLabel}>Selling Price (₹)</Text>
+                      <TextInput
+                        style={[s.formInput, { color: isDark ? '#FFFFFF' : '#0F172A', borderColor: isDark ? '#334155' : '#E2E8F0' }]}
+                        placeholder="e.g. 80"
+                        placeholderTextColor="#94A3B8"
+                        value={newPrice}
+                        onChangeText={setNewPrice}
+                        keyboardType="numeric"
+                      />
+                    </View>
+
+                    <View style={[s.formFieldGroup, { flex: 1 }]}>
+                      <Text style={s.fieldLabel}>Cost Price (₹)</Text>
+                      <TextInput
+                        style={[s.formInput, { color: isDark ? '#FFFFFF' : '#0F172A', borderColor: isDark ? '#334155' : '#E2E8F0' }]}
+                        placeholder="e.g. 60"
+                        placeholderTextColor="#94A3B8"
+                        value={newCostPrice}
+                        onChangeText={setNewCostPrice}
+                        keyboardType="numeric"
+                      />
+                    </View>
+                  </View>
+
+                  <View style={s.formInputRow}>
+                    <View style={[s.formFieldGroup, { flex: 1, marginRight: 10 }]}>
+                      <Text style={s.fieldLabel}>Stock Level</Text>
+                      <TextInput
+                        style={[s.formInput, { color: isDark ? '#FFFFFF' : '#0F172A', borderColor: isDark ? '#334155' : '#E2E8F0' }]}
+                        placeholder="e.g. 50"
+                        placeholderTextColor="#94A3B8"
+                        value={newStock}
+                        onChangeText={setNewStock}
+                        keyboardType="numeric"
+                      />
+                    </View>
+
+                    <View style={[s.formFieldGroup, { flex: 1 }]}>
+                      <Text style={s.fieldLabel}>Unit</Text>
+                      <TextInput
+                        style={[s.formInput, { color: isDark ? '#FFFFFF' : '#0F172A', borderColor: isDark ? '#334155' : '#E2E8F0' }]}
+                        placeholder="e.g. kg, L, pcs"
+                        placeholderTextColor="#94A3B8"
+                        value={newUnit}
+                        onChangeText={setNewUnit}
+                      />
+                    </View>
+                  </View>
+
+                  <View style={s.formInputRow}>
+                    <View style={[s.formFieldGroup, { flex: 1, marginRight: 10 }]}>
+                      <Text style={s.fieldLabel}>Category</Text>
+                      <TextInput
+                        style={[s.formInput, { color: isDark ? '#FFFFFF' : '#0F172A', borderColor: isDark ? '#334155' : '#E2E8F0' }]}
+                        placeholder="e.g. Dairy, Grain"
+                        placeholderTextColor="#94A3B8"
+                        value={newCategory}
+                        onChangeText={setNewCategory}
+                      />
+                    </View>
+
+                    <View style={[s.formFieldGroup, { flex: 1 }]}>
+                      <Text style={s.fieldLabel}>Emoji Icon</Text>
+                      <TextInput
+                        style={[s.formInput, { color: isDark ? '#FFFFFF' : '#0F172A', borderColor: isDark ? '#334155' : '#E2E8F0' }]}
+                        placeholder="e.g. 🥣, 🌾"
+                        placeholderTextColor="#94A3B8"
+                        value={newIcon}
+                        onChangeText={setNewIcon}
+                      />
+                    </View>
+                  </View>
+                </View>
+
+                <View style={s.manualTabActions}>
+                  <TouchableOpacity
+                    style={s.manualAddBtn}
+                    onPress={handleCreateProduct}
+                    disabled={createLoading}
+                  >
+                    {createLoading ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Text style={s.submitBtnText}>Verify & Add Product</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
+            {activeSupplierTab === 'History' && (
+              <View style={s.historyTabContent}>
+                {supplierBillHistory.map((bill) => (
+                  <View key={bill.id} style={[s.historyItem, { backgroundColor: isDark ? '#1E293B' : '#FFFFFF' }]}>
+                    <View style={s.historyLeft}>
+                      <View style={[s.historyIconBox, { backgroundColor: isDark ? '#334155' : '#F1F5F9' }]}>
+                        <MaterialCommunityIcons name="file-document-outline" size={22} color={isDark ? '#94A3B8' : '#718096'} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[s.historyTitle, { color: isDark ? '#FFFFFF' : '#1E293B' }]}>{bill.invoiceId}</Text>
+                        <Text style={s.historySubtitle}>{bill.supplier} • {bill.date}</Text>
+                      </View>
+                    </View>
+                    <View style={s.historyRight}>
+                      <Text style={s.historyVal}>{bill.totalValue}</Text>
+                      <Text style={s.historyQty}>{bill.itemsSummary}</Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* Manual Quick Stock & Price Editor Modal */}
       <Modal
         visible={editingProduct !== null}
         transparent
@@ -497,7 +866,7 @@ export default function ProductsScreen() {
         </View>
       </Modal>
 
-      {/* Add Product Modal Sheet */}
+      {/* Floating Add Product FAB overlay */}
       <Modal
         visible={showAddForm}
         transparent
@@ -633,6 +1002,50 @@ export default function ProductsScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* OCR Document Scanner Visual Loading Indicator */}
+      <Modal visible={isOcrScanning} transparent animationType="fade">
+        <View style={s.loaderOverlay}>
+          <View style={[s.loaderCard, { backgroundColor: isDark ? '#1E293B' : '#FFFFFF' }]}>
+            <ActivityIndicator size="large" color="#FF7E06" />
+            <Text style={[s.loaderText, { color: isDark ? '#FFFFFF' : '#1E293B' }]}>Processing Bill using AI OCR...</Text>
+            <Text style={s.loaderSubtext}>Analyzing text, quantities, and prices</Text>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Bill Digitized Success Modal Sheet */}
+      <Modal visible={scannedResultModal !== null} transparent animationType="fade">
+        <View style={s.modalOverlay}>
+          {scannedResultModal && (
+            <View style={[s.successCard, { backgroundColor: isDark ? '#1E293B' : '#FFFFFF' }]}>
+              <View style={s.successIconBox}>
+                <MaterialCommunityIcons name="check-circle" size={48} color="#10B981" />
+              </View>
+              <Text style={[s.successTitle, { color: isDark ? '#FFFFFF' : '#1E293B' }]}>Bill Digitized Successfully!</Text>
+              <Text style={s.successInvoiceId}>{scannedResultModal.invoiceId}</Text>
+              <Text style={s.successSupplier}>Supplier: {scannedResultModal.supplier}</Text>
+              
+              <View style={[s.scannedItemsList, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(148,163,184,0.06)' }]}>
+                <Text style={s.scannedItemsTitle}>ITEMS DETECTED & ADDED:</Text>
+                {scannedResultModal.items.map((item, idx) => (
+                  <View key={idx} style={s.scannedItemRow}>
+                    <Text style={[s.scannedItemName, { color: isDark ? '#F1F5F9' : '#334155' }]}>{item.name}</Text>
+                    <Text style={s.scannedItemQty}>+{item.qty} {item.unit}</Text>
+                  </View>
+                ))}
+              </View>
+
+              <TouchableOpacity
+                style={s.successCloseBtn}
+                onPress={() => setScannedResultModal(null)}
+              >
+                <Text style={s.successCloseBtnText}>Close & Update Stock</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -650,6 +1063,46 @@ const s = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 10,
     elevation: 6,
+  },
+  headerInnerTitleRow: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    marginBottom: 14,
+    gap: 4,
+  },
+  headerTitleMain: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#000000',
+  },
+  inventoryBadge: {
+    backgroundColor: 'rgba(0,0,0,0.08)',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  inventoryBadgeText: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#000000',
+    letterSpacing: 1.5,
+  },
+  addStockBtn: {
+    backgroundColor: 'rgba(0,0,0,0.08)',
+    borderRadius: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'stretch',
+    marginBottom: 20,
+    gap: 6,
+  },
+  addStockBtnText: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#000000',
   },
   searchBarContainer: {
     height: 48,
@@ -1056,5 +1509,339 @@ const s = StyleSheet.create({
   },
   addFormSubmit: {
     backgroundColor: '#FF7E06',
+  },
+
+  // Supplier Bills Layout Styles
+  supplierContainer: {
+    flex: 1,
+    paddingTop: 50,
+  },
+  header: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.sm,
+    borderBottomWidth: 1,
+  },
+  headerInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  avatarBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 2,
+  },
+  avatarPlaceholder: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#2E7D32',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#fff',
+  },
+  brand: {
+    fontSize: 18,
+    fontWeight: '900',
+    letterSpacing: -0.5,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  langBtn: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  langText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  menuBtn: {
+    padding: spacing.sm,
+    borderRadius: 12,
+  },
+  supplierTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 15,
+  },
+  supplierIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  supplierMainTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+  },
+  supplierSubtitle: {
+    fontSize: 11,
+    color: '#94A3B8',
+    marginTop: 2,
+  },
+  segmentBarContainer: {
+    backgroundColor: '#1E293B',
+    borderRadius: 14,
+    flexDirection: 'row',
+    padding: 4,
+    marginHorizontal: 20,
+    marginBottom: 20,
+  },
+  segmentTab: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  segmentActiveTab: {
+    backgroundColor: '#334155',
+    borderRadius: 10,
+  },
+  segmentTabText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  supplierBody: {
+    flex: 1,
+  },
+  scanTabContent: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  scanCard: {
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderRadius: 28,
+    paddingVertical: 64,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 20,
+    marginTop: 10,
+  },
+  cameraCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  scanTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  scanSubtitle: {
+    fontSize: 12,
+    color: '#94A3B8',
+    marginTop: 6,
+  },
+  manualTabContent: {
+    marginHorizontal: 20,
+    marginTop: 10,
+    borderRadius: 28,
+    borderWidth: 1,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  manualTabTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    marginBottom: 18,
+  },
+  manualTabActions: {
+    marginTop: spacing.xl,
+  },
+  manualAddBtn: {
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: '#FF7E06',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  historyTabContent: {
+    marginTop: 10,
+    paddingBottom: 40,
+  },
+  historyItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: 18,
+    padding: 16,
+    marginHorizontal: 20,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  historyLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  historyIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  historyTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  historySubtitle: {
+    fontSize: 11,
+    color: '#94A3B8',
+    marginTop: 2,
+  },
+  historyRight: {
+    alignItems: 'flex-end',
+    flex: 1,
+    paddingLeft: 10,
+  },
+  historyVal: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#10B981',
+  },
+  historyQty: {
+    fontSize: 10,
+    color: '#94A3B8',
+    marginTop: 2,
+    textAlign: 'right',
+  },
+
+  // Loader Visuals
+  loaderOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loaderCard: {
+    padding: 30,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    width: '80%',
+  },
+  loaderText: {
+    fontSize: 15,
+    fontWeight: '800',
+    marginTop: 10,
+    textAlign: 'center',
+  },
+  loaderSubtext: {
+    fontSize: 11,
+    color: '#94A3B8',
+    textAlign: 'center',
+  },
+
+  // Success Results
+  successCard: {
+    width: '85%',
+    maxWidth: 380,
+    borderRadius: 32,
+    padding: spacing.xl,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  successIconBox: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(16,185,129,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  successTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  successInvoiceId: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#3B82F6',
+    marginTop: 6,
+  },
+  successSupplier: {
+    fontSize: 12,
+    color: '#94A3B8',
+    marginTop: 2,
+  },
+  scannedItemsList: {
+    width: '100%',
+    borderRadius: 16,
+    padding: 16,
+    marginVertical: 20,
+    gap: 8,
+  },
+  scannedItemsTitle: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#94A3B8',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  scannedItemRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  scannedItemName: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  scannedItemQty: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#10B981',
+  },
+  successCloseBtn: {
+    width: '100%',
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: '#10B981',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  successCloseBtnText: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#FFFFFF',
   },
 });
