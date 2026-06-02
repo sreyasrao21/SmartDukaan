@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  FlatList,
   TextInput,
   TouchableOpacity,
   Modal,
@@ -13,6 +12,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  Animated,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -111,6 +111,56 @@ export default function ProductsScreen() {
   const { isDark } = useTheme();
   const { addToast } = useToast();
   const { user } = useAuth();
+
+  // ─── Animated scroll header ───────────────────────────────────────────────
+  const scrollY = useRef(new Animated.Value(0)).current;
+
+  // Clamp scroll so animation reverses on scroll-up
+  const clampedScroll = Animated.diffClamp(scrollY, 0, 90);
+
+  // Header container shrinks from full paddingBottom to compact
+  const headerPaddingBottom = clampedScroll.interpolate({
+    inputRange: [0, 90],
+    outputRange: [40, 14],
+    extrapolate: 'clamp',
+  });
+
+  // Title row fades + slides up
+  const titleOpacity = clampedScroll.interpolate({
+    inputRange: [0, 50],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
+  const titleTranslateY = clampedScroll.interpolate({
+    inputRange: [0, 50],
+    outputRange: [0, -20],
+    extrapolate: 'clamp',
+  });
+
+  // Badge fades earlier
+  const badgeOpacity = clampedScroll.interpolate({
+    inputRange: [0, 30],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
+
+  // Add-to-Stock button shrinks + fades
+  const btnOpacity = clampedScroll.interpolate({
+    inputRange: [0, 60],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
+  const btnHeight = clampedScroll.interpolate({
+    inputRange: [0, 60],
+    outputRange: [44, 0],
+    extrapolate: 'clamp',
+  });
+  const btnMarginBottom = clampedScroll.interpolate({
+    inputRange: [0, 60],
+    outputRange: [20, 0],
+    extrapolate: 'clamp',
+  });
+  // ─────────────────────────────────────────────────────────────────────────
 
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
@@ -549,41 +599,60 @@ export default function ProductsScreen() {
 
   return (
     <View style={[s.container, { backgroundColor: isDark ? '#0F172A' : '#F8FAFC' }]}>
-      {/* Orange-to-Yellow Curved Command Header */}
+      {/* Animated Orange-to-Yellow Curved Command Header */}
       <LinearGradient
         colors={['#FFD200', '#FF7E06']}
         start={{ x: 0, y: 0 }}
         end={{ x: 0, y: 1 }}
-        style={s.orangeHeader}
+        style={s.orangeHeaderBase}
       >
-        <View style={s.headerInnerTitleRow}>
-          <Text style={s.headerTitleMain}>Products 📦</Text>
-          <View style={s.inventoryBadge}>
-            <Text style={s.inventoryBadgeText}>INVENTORY COMMAND CENTER</Text>
+        <Animated.View style={{ paddingBottom: headerPaddingBottom }}>
+          {/* Title row — fades + slides up on scroll */}
+          <Animated.View
+            style={[
+              s.headerInnerTitleRow,
+              { opacity: titleOpacity, transform: [{ translateY: titleTranslateY }] },
+            ]}
+          >
+            <Text style={s.headerTitleMain}>Products 📦</Text>
+            <Animated.View style={[s.inventoryBadge, { opacity: badgeOpacity }]}>
+              <Text style={s.inventoryBadgeText}>INVENTORY COMMAND CENTER</Text>
+            </Animated.View>
+          </Animated.View>
+
+          {/* Add-to-Stock button — collapses height + fades */}
+          <Animated.View
+            style={{
+              overflow: 'hidden',
+              height: btnHeight,
+              opacity: btnOpacity,
+              marginBottom: btnMarginBottom,
+            }}
+          >
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={() => {
+                setActiveSupplierTab('Scan');
+                setShowSupplierBills(true);
+              }}
+              style={s.addStockBtn}
+            >
+              <MaterialCommunityIcons name="plus" size={18} color="#000000" />
+              <Text style={s.addStockBtnText}>Add to Stock</Text>
+            </TouchableOpacity>
+          </Animated.View>
+
+          {/* Search bar — always visible */}
+          <View style={s.searchBarContainer}>
+            <TextInput
+              style={s.searchInput}
+              placeholder="Search by name or cat"
+              placeholderTextColor="#94A3B8"
+              value={searchTerm}
+              onChangeText={setSearchTerm}
+            />
           </View>
-        </View>
-
-        <TouchableOpacity
-          activeOpacity={0.9}
-          onPress={() => {
-            setActiveSupplierTab('Scan');
-            setShowSupplierBills(true);
-          }}
-          style={s.addStockBtn}
-        >
-          <MaterialCommunityIcons name="plus" size={18} color="#000000" />
-          <Text style={s.addStockBtnText}>Add to Stock</Text>
-        </TouchableOpacity>
-
-        <View style={s.searchBarContainer}>
-          <TextInput
-            style={s.searchInput}
-            placeholder="Search by name or cat"
-            placeholderTextColor="#94A3B8"
-            value={searchTerm}
-            onChangeText={setSearchTerm}
-          />
-        </View>
+        </Animated.View>
       </LinearGradient>
 
       {/* Main Catalog Body */}
@@ -597,13 +666,13 @@ export default function ProductsScreen() {
             <Text style={s.loadingText}>Loading Inventory...</Text>
           </View>
         ) : (
-          <FlatList
+          <Animated.FlatList
             data={filteredProducts}
-            keyExtractor={(item) => item._id}
-            renderItem={({ item }) => (
+            keyExtractor={(item: Product) => item._id}
+            renderItem={({ item }: { item: Product }) => (
               <ProductCardItem
                 item={item}
-                onEdit={(p) => {
+                onEdit={(p: Product) => {
                   setEditingProduct(p);
                   setEditPrice(p.price.toString());
                   setEditCostPrice(p.costPrice ? p.costPrice.toString() : '');
@@ -617,6 +686,11 @@ export default function ProductsScreen() {
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#FF7E06" />
             }
+            onScroll={Animated.event(
+              [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+              { useNativeDriver: false }
+            )}
+            scrollEventThrottle={16}
             ListEmptyComponent={
               <View style={[s.emptyState, { borderColor: isDark ? '#334155' : '#E2E8F0' }]}>
                 <MaterialCommunityIcons name="package-variant" size={64} color="#94A3B8" />
@@ -1454,9 +1528,8 @@ export default function ProductsScreen() {
 
 const s = StyleSheet.create({
   container: { flex: 1 },
-  orangeHeader: {
+  orangeHeaderBase: {
     paddingTop: 20,
-    paddingBottom: 40,
     paddingHorizontal: 20,
     borderBottomLeftRadius: 36,
     borderBottomRightRadius: 36,
@@ -1465,6 +1538,7 @@ const s = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 10,
     elevation: 6,
+    overflow: 'hidden',
   },
   headerInnerTitleRow: {
     flexDirection: 'column',
