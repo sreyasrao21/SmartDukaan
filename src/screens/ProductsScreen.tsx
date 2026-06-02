@@ -22,7 +22,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
-import { productApi } from '../services/api';
+import { productApi, supplierBillApi, ocrApi } from '../services/api';
 import { spacing } from '../theme';
 
 interface InventoryBatch {
@@ -370,7 +370,17 @@ export default function ProductsScreen() {
           copyToCacheDirectory: true,
         });
         if (!result.canceled && result.assets && result.assets.length > 0) {
-          processScannedBill();
+          const file = result.assets[0].file;
+          if (file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              const base64 = e.target?.result as string;
+              processScannedBill(base64);
+            };
+            reader.readAsDataURL(file);
+          } else {
+            addToast('Could not read file data', 'error');
+          }
         }
       } catch (err) {
         console.error('Failed to select document:', err);
@@ -385,27 +395,49 @@ export default function ProductsScreen() {
       const result = await ImagePicker.launchCameraAsync({
         allowsEditing: true,
         quality: 0.8,
+        base64: true,
       });
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        processScannedBill();
+        const base64 = result.assets[0].base64;
+        if (base64) {
+          processScannedBill(`data:image/jpeg;base64,${base64}`);
+        } else {
+          addToast('Could not extract image data', 'error');
+        }
       }
     }
   };
 
-  const processScannedBill = () => {
+  const processScannedBill = async (base64Data: string) => {
     setIsOcrScanning(true);
-    setTimeout(async () => {
-      setIsOcrScanning(false);
+    try {
+      const response = await ocrApi.scanBill({ imageBase64: base64Data });
       
-      setOcrScannedItems([
-        { id: 'ocr-1', name: 'Sona Masuri Rice', qty: 1, unit: 'KG', total: 60, costPrice: 60, sellPrice: 63 },
-        { id: 'ocr-2', name: 'Dalia', qty: 1, unit: 'KG', total: 65, costPrice: 65, sellPrice: 68 },
-        { id: 'ocr-3', name: 'Toor Dal', qty: 1, unit: 'KG', total: 165, costPrice: 165, sellPrice: 173 },
-        { id: 'ocr-4', name: 'Chana Dal', qty: 1, unit: 'KG', total: 95, costPrice: 95, sellPrice: 100 },
-      ]);
+      if (!response.data.items || response.data.items.length === 0) {
+         addToast('No items could be extracted from this bill', 'error');
+         setIsOcrScanning(false);
+         return;
+      }
+      
+      const mappedItems = response.data.items.map((item: any, index: number) => ({
+        id: `ocr-${Date.now()}-${index}`,
+        name: item.productName || 'Unknown Item',
+        qty: item.quantity || 1,
+        unit: item.unit || 'pcs',
+        total: item.totalAmount || 0,
+        costPrice: item.unitPrice || 0,
+        sellPrice: (item.unitPrice || 0) * 1.1 // Default 10% margin
+      }));
+
+      setOcrScannedItems(mappedItems);
       setShowOcrReview(true);
       addToast('Bill digitized successfully! Ready for review.', 'success');
-    }, 2500);
+    } catch (error) {
+      console.error('OCR failed:', error);
+      addToast('Failed to process bill with AI. Please try again.', 'error');
+    } finally {
+      setIsOcrScanning(false);
+    }
   };
 
   const handleUpdateOcrItemField = (id: string, field: keyof OcrItem, value: any) => {
