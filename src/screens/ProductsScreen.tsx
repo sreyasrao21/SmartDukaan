@@ -771,6 +771,163 @@ export default function ProductsScreen() {
               </View>
             )}
           </ScrollView>
+
+          {/* Custom Scan Bill Action Sheet Modal (Nested inside so it always displays perfectly on top on both Web & Mobile!) */}
+          <Modal
+            visible={showScanMenu}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setShowScanMenu(false)}
+          >
+            <View style={s.modalOverlay}>
+              <TouchableOpacity
+                style={StyleSheet.absoluteFillObject}
+                activeOpacity={1}
+                onPress={() => setShowScanMenu(false)}
+              />
+              <View style={[s.actionSheetCard, { backgroundColor: isDark ? '#1E293B' : '#FFFFFF' }]}>
+                <View style={s.actionSheetHeader}>
+                  <Text style={[s.actionSheetTitle, { color: isDark ? '#FFFFFF' : '#1E293B' }]}>
+                    Select Bill Source
+                  </Text>
+                  <TouchableOpacity onPress={() => setShowScanMenu(false)}>
+                    <MaterialCommunityIcons name="close" size={20} color="#94A3B8" />
+                  </TouchableOpacity>
+                </View>
+
+                <View style={s.actionSheetBody}>
+                  {/* Option 1: Take Photo */}
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    style={[s.actionSheetRow, { borderBottomColor: isDark ? 'rgba(255,255,255,0.05)' : '#F3F4F6' }]}
+                    onPress={async () => {
+                      setShowScanMenu(false);
+                      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+                      if (status !== 'granted') {
+                        Alert.alert('Permission Denied', 'Camera access is required to scan bills.');
+                        return;
+                      }
+                      const result = await ImagePicker.launchCameraAsync({
+                        allowsEditing: true,
+                        quality: 0.8,
+                      });
+                      if (!result.canceled && result.assets && result.assets.length > 0) {
+                        processScannedBill();
+                      }
+                    }}
+                  >
+                    <View style={[s.actionSheetIconBox, { backgroundColor: '#ECFDF4' }]}>
+                      <MaterialCommunityIcons name="camera" size={20} color="#10B981" />
+                    </View>
+                    <Text style={[s.actionSheetText, { color: isDark ? '#F1F5F9' : '#334155' }]}>Take Photo</Text>
+                  </TouchableOpacity>
+
+                  {/* Option 2: Choose Image */}
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    style={[s.actionSheetRow, { borderBottomColor: isDark ? 'rgba(255,255,255,0.05)' : '#F3F4F6' }]}
+                    onPress={async () => {
+                      setShowScanMenu(false);
+                      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+                      if (status !== 'granted') {
+                        Alert.alert('Permission Denied', 'Media library access is required.');
+                        return;
+                      }
+                      const result = await ImagePicker.launchImageLibraryAsync({
+                        allowsEditing: true,
+                        quality: 0.8,
+                      });
+                      if (!result.canceled && result.assets && result.assets.length > 0) {
+                        processScannedBill();
+                      }
+                    }}
+                  >
+                    <View style={[s.actionSheetIconBox, { backgroundColor: '#EFF6FF' }]}>
+                      <MaterialCommunityIcons name="image" size={20} color="#3B82F6" />
+                    </View>
+                    <Text style={[s.actionSheetText, { color: isDark ? '#F1F5F9' : '#334155' }]}>Choose from Gallery</Text>
+                  </TouchableOpacity>
+
+                  {/* Option 3: Upload PDF */}
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    style={s.actionSheetRow}
+                    onPress={async () => {
+                      setShowScanMenu(false);
+                      try {
+                        const result = await DocumentPicker.getDocumentAsync({
+                          type: ['application/pdf', 'image/*'],
+                          copyToCacheDirectory: true,
+                        });
+                        if (!result.canceled && result.assets && result.assets.length > 0) {
+                          processScannedBill();
+                        }
+                      } catch (err) {
+                        console.error('Failed to select document:', err);
+                        addToast('Failed to select document', 'error');
+                      }
+                    }}
+                  >
+                    <View style={[s.actionSheetIconBox, { backgroundColor: '#FEF3C7' }]}>
+                      <MaterialCommunityIcons name="file-pdf-box" size={20} color="#D97706" />
+                    </View>
+                    <Text style={[s.actionSheetText, { color: isDark ? '#F1F5F9' : '#334155' }]}>Upload PDF Document</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <TouchableOpacity
+                  style={[s.actionSheetCancelBtn, { backgroundColor: isDark ? '#334155' : '#F1F5F9' }]}
+                  onPress={() => setShowScanMenu(false)}
+                >
+                  <Text style={[s.actionSheetCancelText, { color: isDark ? '#94A3B8' : '#718096' }]}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Modal>
+
+          {/* OCR Document Scanner Visual Loading Indicator */}
+          <Modal visible={isOcrScanning} transparent animationType="fade">
+            <View style={s.loaderOverlay}>
+              <View style={[s.loaderCard, { backgroundColor: isDark ? '#1E293B' : '#FFFFFF' }]}>
+                <ActivityIndicator size="large" color="#FF7E06" />
+                <Text style={[s.loaderText, { color: isDark ? '#FFFFFF' : '#1E293B' }]}>Processing Bill using AI OCR...</Text>
+                <Text style={s.loaderSubtext}>Analyzing text, quantities, and prices</Text>
+              </View>
+            </View>
+          </Modal>
+
+          {/* Bill Digitized Success Modal Sheet */}
+          <Modal visible={scannedResultModal !== null} transparent animationType="fade">
+            <View style={s.modalOverlay}>
+              {scannedResultModal && (
+                <View style={[s.successCard, { backgroundColor: isDark ? '#1E293B' : '#FFFFFF' }]}>
+                  <View style={s.successIconBox}>
+                    <MaterialCommunityIcons name="check-circle" size={48} color="#10B981" />
+                  </View>
+                  <Text style={[s.successTitle, { color: isDark ? '#FFFFFF' : '#1E293B' }]}>Bill Digitized Successfully!</Text>
+                  <Text style={s.successInvoiceId}>{scannedResultModal.invoiceId}</Text>
+                  <Text style={s.successSupplier}>Supplier: {scannedResultModal.supplier}</Text>
+                  
+                  <View style={[s.scannedItemsList, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(148,163,184,0.06)' }]}>
+                    <Text style={s.scannedItemsTitle}>ITEMS DETECTED & ADDED:</Text>
+                    {scannedResultModal.items.map((item, idx) => (
+                      <View key={idx} style={s.scannedItemRow}>
+                        <Text style={[s.scannedItemName, { color: isDark ? '#F1F5F9' : '#334155' }]}>{item.name}</Text>
+                        <Text style={s.scannedItemQty}>+{item.qty} {item.unit}</Text>
+                      </View>
+                    ))}
+                  </View>
+
+                  <TouchableOpacity
+                    style={s.successCloseBtn}
+                    onPress={() => setScannedResultModal(null)}
+                  >
+                    <Text style={s.successCloseBtnText}>Close & Update Stock</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          </Modal>
         </View>
       </Modal>
 
@@ -1018,163 +1175,6 @@ export default function ProductsScreen() {
                 </TouchableOpacity>
               </View>
             </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
-      {/* OCR Document Scanner Visual Loading Indicator */}
-      <Modal visible={isOcrScanning} transparent animationType="fade">
-        <View style={s.loaderOverlay}>
-          <View style={[s.loaderCard, { backgroundColor: isDark ? '#1E293B' : '#FFFFFF' }]}>
-            <ActivityIndicator size="large" color="#FF7E06" />
-            <Text style={[s.loaderText, { color: isDark ? '#FFFFFF' : '#1E293B' }]}>Processing Bill using AI OCR...</Text>
-            <Text style={s.loaderSubtext}>Analyzing text, quantities, and prices</Text>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Bill Digitized Success Modal Sheet */}
-      <Modal visible={scannedResultModal !== null} transparent animationType="fade">
-        <View style={s.modalOverlay}>
-          {scannedResultModal && (
-            <View style={[s.successCard, { backgroundColor: isDark ? '#1E293B' : '#FFFFFF' }]}>
-              <View style={s.successIconBox}>
-                <MaterialCommunityIcons name="check-circle" size={48} color="#10B981" />
-              </View>
-              <Text style={[s.successTitle, { color: isDark ? '#FFFFFF' : '#1E293B' }]}>Bill Digitized Successfully!</Text>
-              <Text style={s.successInvoiceId}>{scannedResultModal.invoiceId}</Text>
-              <Text style={s.successSupplier}>Supplier: {scannedResultModal.supplier}</Text>
-              
-              <View style={[s.scannedItemsList, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(148,163,184,0.06)' }]}>
-                <Text style={s.scannedItemsTitle}>ITEMS DETECTED & ADDED:</Text>
-                {scannedResultModal.items.map((item, idx) => (
-                  <View key={idx} style={s.scannedItemRow}>
-                    <Text style={[s.scannedItemName, { color: isDark ? '#F1F5F9' : '#334155' }]}>{item.name}</Text>
-                    <Text style={s.scannedItemQty}>+{item.qty} {item.unit}</Text>
-                  </View>
-                ))}
-              </View>
-
-              <TouchableOpacity
-                style={s.successCloseBtn}
-                onPress={() => setScannedResultModal(null)}
-              >
-                <Text style={s.successCloseBtnText}>Close & Update Stock</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
-      </Modal>
-
-      {/* Custom Scan Bill Action Sheet Modal (Highly premium and 100% compatible with Web & Mobile!) */}
-      <Modal
-        visible={showScanMenu}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowScanMenu(false)}
-      >
-        <View style={s.modalOverlay}>
-          <TouchableOpacity
-            style={StyleSheet.absoluteFillObject}
-            activeOpacity={1}
-            onPress={() => setShowScanMenu(false)}
-          />
-          <View style={[s.actionSheetCard, { backgroundColor: isDark ? '#1E293B' : '#FFFFFF' }]}>
-            <View style={s.actionSheetHeader}>
-              <Text style={[s.actionSheetTitle, { color: isDark ? '#FFFFFF' : '#1E293B' }]}>
-                Select Bill Source
-              </Text>
-              <TouchableOpacity onPress={() => setShowScanMenu(false)}>
-                <MaterialCommunityIcons name="close" size={20} color="#94A3B8" />
-              </TouchableOpacity>
-            </View>
-
-            <View style={s.actionSheetBody}>
-              {/* Option 1: Take Photo */}
-              <TouchableOpacity
-                activeOpacity={0.7}
-                style={[s.actionSheetRow, { borderBottomColor: isDark ? 'rgba(255,255,255,0.05)' : '#F3F4F6' }]}
-                onPress={async () => {
-                  setShowScanMenu(false);
-                  const { status } = await ImagePicker.requestCameraPermissionsAsync();
-                  if (status !== 'granted') {
-                    Alert.alert('Permission Denied', 'Camera access is required to scan bills.');
-                    return;
-                  }
-                  const result = await ImagePicker.launchCameraAsync({
-                    allowsEditing: true,
-                    quality: 0.8,
-                  });
-                  if (!result.canceled && result.assets && result.assets.length > 0) {
-                    processScannedBill();
-                  }
-                }}
-              >
-                <View style={[s.actionSheetIconBox, { backgroundColor: '#ECFDF4' }]}>
-                  <MaterialCommunityIcons name="camera" size={20} color="#10B981" />
-                </View>
-                <Text style={[s.actionSheetText, { color: isDark ? '#F1F5F9' : '#334155' }]}>Take Photo</Text>
-              </TouchableOpacity>
-
-              {/* Option 2: Choose Image */}
-              <TouchableOpacity
-                activeOpacity={0.7}
-                style={[s.actionSheetRow, { borderBottomColor: isDark ? 'rgba(255,255,255,0.05)' : '#F3F4F6' }]}
-                onPress={async () => {
-                  setShowScanMenu(false);
-                  const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-                  if (status !== 'granted') {
-                    Alert.alert('Permission Denied', 'Media library access is required.');
-                    return;
-                  }
-                  const result = await ImagePicker.launchImageLibraryAsync({
-                    allowsEditing: true,
-                    quality: 0.8,
-                  });
-                  if (!result.canceled && result.assets && result.assets.length > 0) {
-                    processScannedBill();
-                  }
-                }}
-              >
-                <View style={[s.actionSheetIconBox, { backgroundColor: '#EFF6FF' }]}>
-                  <MaterialCommunityIcons name="image" size={20} color="#3B82F6" />
-                </View>
-                <Text style={[s.actionSheetText, { color: isDark ? '#F1F5F9' : '#334155' }]}>Choose from Gallery</Text>
-              </TouchableOpacity>
-
-              {/* Option 3: Upload PDF */}
-              <TouchableOpacity
-                activeOpacity={0.7}
-                style={s.actionSheetRow}
-                onPress={async () => {
-                  setShowScanMenu(false);
-                  try {
-                    const result = await DocumentPicker.getDocumentAsync({
-                      type: ['application/pdf', 'image/*'],
-                      copyToCacheDirectory: true,
-                    });
-                    if (!result.canceled && result.assets && result.assets.length > 0) {
-                      processScannedBill();
-                    }
-                  } catch (err) {
-                    console.error('Failed to select document:', err);
-                    addToast('Failed to select document', 'error');
-                  }
-                }}
-              >
-                <View style={[s.actionSheetIconBox, { backgroundColor: '#FEF3C7' }]}>
-                  <MaterialCommunityIcons name="file-pdf-box" size={20} color="#D97706" />
-                </View>
-                <Text style={[s.actionSheetText, { color: isDark ? '#F1F5F9' : '#334155' }]}>Upload PDF Document</Text>
-              </TouchableOpacity>
-            </View>
-
-            <TouchableOpacity
-              style={[s.actionSheetCancelBtn, { backgroundColor: isDark ? '#334155' : '#F1F5F9' }]}
-              onPress={() => setShowScanMenu(false)}
-            >
-              <Text style={[s.actionSheetCancelText, { color: isDark ? '#94A3B8' : '#718096' }]}>Cancel</Text>
-            </TouchableOpacity>
           </View>
         </View>
       </Modal>
