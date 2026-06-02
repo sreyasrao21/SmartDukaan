@@ -772,14 +772,9 @@ export default function ProductsScreen() {
             )}
           </ScrollView>
 
-          {/* Custom Scan Bill Action Sheet Modal (Nested inside so it always displays perfectly on top on both Web & Mobile!) */}
-          <Modal
-            visible={showScanMenu}
-            transparent
-            animationType="fade"
-            onRequestClose={() => setShowScanMenu(false)}
-          >
-            <View style={s.modalOverlay}>
+          {/* Custom Scan Bill Action Sheet Modal (Nested absolute View overlay for 100% Web & Mobile compatibility!) */}
+          {showScanMenu && (
+            <View style={[StyleSheet.absoluteFill, s.modalOverlay, { zIndex: 9999 }]}>
               <TouchableOpacity
                 style={StyleSheet.absoluteFillObject}
                 activeOpacity={1}
@@ -883,51 +878,54 @@ export default function ProductsScreen() {
                 </TouchableOpacity>
               </View>
             </View>
-          </Modal>
+          )}
 
           {/* OCR Document Scanner Visual Loading Indicator */}
-          <Modal visible={isOcrScanning} transparent animationType="fade">
-            <View style={s.loaderOverlay}>
+          {isOcrScanning && (
+            <View style={[StyleSheet.absoluteFill, s.loaderOverlay, { zIndex: 10000 }]}>
               <View style={[s.loaderCard, { backgroundColor: isDark ? '#1E293B' : '#FFFFFF' }]}>
                 <ActivityIndicator size="large" color="#FF7E06" />
                 <Text style={[s.loaderText, { color: isDark ? '#FFFFFF' : '#1E293B' }]}>Processing Bill using AI OCR...</Text>
                 <Text style={s.loaderSubtext}>Analyzing text, quantities, and prices</Text>
               </View>
             </View>
-          </Modal>
+          )}
 
           {/* Bill Digitized Success Modal Sheet */}
-          <Modal visible={scannedResultModal !== null} transparent animationType="fade">
-            <View style={s.modalOverlay}>
-              {scannedResultModal && (
-                <View style={[s.successCard, { backgroundColor: isDark ? '#1E293B' : '#FFFFFF' }]}>
-                  <View style={s.successIconBox}>
-                    <MaterialCommunityIcons name="check-circle" size={48} color="#10B981" />
-                  </View>
-                  <Text style={[s.successTitle, { color: isDark ? '#FFFFFF' : '#1E293B' }]}>Bill Digitized Successfully!</Text>
-                  <Text style={s.successInvoiceId}>{scannedResultModal.invoiceId}</Text>
-                  <Text style={s.successSupplier}>Supplier: {scannedResultModal.supplier}</Text>
-                  
-                  <View style={[s.scannedItemsList, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(148,163,184,0.06)' }]}>
-                    <Text style={s.scannedItemsTitle}>ITEMS DETECTED & ADDED:</Text>
-                    {scannedResultModal.items.map((item, idx) => (
-                      <View key={idx} style={s.scannedItemRow}>
-                        <Text style={[s.scannedItemName, { color: isDark ? '#F1F5F9' : '#334155' }]}>{item.name}</Text>
-                        <Text style={s.scannedItemQty}>+{item.qty} {item.unit}</Text>
-                      </View>
-                    ))}
-                  </View>
-
-                  <TouchableOpacity
-                    style={s.successCloseBtn}
-                    onPress={() => setScannedResultModal(null)}
-                  >
-                    <Text style={s.successCloseBtnText}>Close & Update Stock</Text>
-                  </TouchableOpacity>
+          {scannedResultModal !== null && (
+            <View style={[StyleSheet.absoluteFill, s.loaderOverlay, { zIndex: 10000 }]}>
+              <TouchableOpacity
+                style={StyleSheet.absoluteFillObject}
+                activeOpacity={1}
+                onPress={() => setScannedResultModal(null)}
+              />
+              <View style={[s.successCard, { backgroundColor: isDark ? '#1E293B' : '#FFFFFF' }]}>
+                <View style={s.successIconBox}>
+                  <MaterialCommunityIcons name="check-circle" size={48} color="#10B981" />
                 </View>
-              )}
+                <Text style={[s.successTitle, { color: isDark ? '#FFFFFF' : '#1E293B' }]}>Bill Digitized Successfully!</Text>
+                <Text style={s.successInvoiceId}>{scannedResultModal.invoiceId}</Text>
+                <Text style={s.successSupplier}>Supplier: {scannedResultModal.supplier}</Text>
+                
+                <View style={[s.scannedItemsList, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(148,163,184,0.06)' }]}>
+                  <Text style={s.scannedItemsTitle}>ITEMS DETECTED & ADDED:</Text>
+                  {scannedResultModal.items.map((item, idx) => (
+                    <View key={idx} style={s.scannedItemRow}>
+                      <Text style={[s.scannedItemName, { color: isDark ? '#F1F5F9' : '#334155' }]}>{item.name}</Text>
+                      <Text style={s.scannedItemQty}>+{item.qty} {item.unit}</Text>
+                    </View>
+                  ))}
+                </View>
+
+                <TouchableOpacity
+                  style={s.successCloseBtn}
+                  onPress={() => setScannedResultModal(null)}
+                >
+                  <Text style={s.successCloseBtnText}>Close & Update Stock</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </Modal>
+          )}
         </View>
       </Modal>
 
