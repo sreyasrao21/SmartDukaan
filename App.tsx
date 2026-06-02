@@ -11,6 +11,7 @@ import { ToastProvider } from './src/contexts/ToastContext';
 import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
 import AuthScreen from './src/screens/AuthScreen';
 import HomeScreen from './src/screens/HomeScreen';
+import CustomerScreen from './src/screens/CustomerScreen';
 import { fontSize, spacing } from './src/theme';
 
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
@@ -202,7 +203,7 @@ function HomeTabs() {
         />
         <Tab.Screen
           name="CustomersTab"
-          component={() => <PlaceholderScreen label="Customers" />}
+          component={CustomerScreen}
           options={{
             tabBarIcon: ({ color, focused }) => (
               <View style={[styles.tabIconWrap, focused && styles.tabIconActive]}>

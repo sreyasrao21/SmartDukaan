@@ -61,7 +61,7 @@ const ToastCard: React.FC<{ toast: Toast; onRemove: () => void }> = ({ toast, on
   const { colors } = useTheme();
   const opacity = useRef(new Animated.Value(0)).current;
   const cfg = TOAST_CONFIG[toast.type];
-  const toastColor = colors[toast.type === 'success' ? 'success' : toast.type === 'error' ? 'error' : toast.type === 'warning' ? 'warning' : 'info'];
+  const toastColor = colors[toast.type === 'success' ? 'success' : toast.type === 'error' ? 'error' : toast.type === 'warning' ? 'warning' : 'accent'];
 
   useEffect(() => {
     Animated.timing(opacity, {

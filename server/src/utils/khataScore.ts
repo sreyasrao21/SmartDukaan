@@ -95,7 +95,7 @@ export const recalculateGlobalKhataScore = async (customerId: string) => {
             ptsSum += 0.0;
         }
     }
-    const PTS = ptsSum / debits.length;
+    const PTS = debits.length > 0 ? (ptsSum / debits.length) : 1.0;
 
     // 2. Consistency Score (CS) - 25%
     // CS = 1 - (latePayments / totalKhataTransactions)

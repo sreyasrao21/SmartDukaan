@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 import { authApi } from '../services/api';
 
 interface User {
@@ -33,14 +34,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const initAuth = async () => {
       try {
-        const storedToken = await SecureStore.getItemAsync('token');
+        let storedToken = null;
+        if (Platform.OS === 'web') {
+          storedToken = localStorage.getItem('token');
+        } else {
+          storedToken = await SecureStore.getItemAsync('token');
+        }
+        
+        // Safety fallback
+        if (!storedToken && typeof window !== 'undefined') {
+          storedToken = window.localStorage?.getItem('token');
+        }
+
         if (storedToken) {
           setToken(storedToken);
           const response = await authApi.getMe();
           setUser(response.data);
         }
       } catch {
-        try { await SecureStore.deleteItemAsync('token'); } catch {}
+        try {
+          if (Platform.OS === 'web') {
+            localStorage.removeItem('token');
+          } else {
+            await SecureStore.deleteItemAsync('token');
+          }
+        } catch {}
         setToken(null);
         setUser(null);
       } finally {
@@ -51,13 +69,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const logout = async () => {
-    try { await SecureStore.deleteItemAsync('token'); } catch {}
+    try {
+      if (Platform.OS === 'web') {
+        localStorage.removeItem('token');
+      } else {
+        await SecureStore.deleteItemAsync('token');
+      }
+    } catch {}
     setToken(null);
     setUser(null);
   };
 
   const login = async (newToken: string, newUser: User) => {
-    try { await SecureStore.setItemAsync('token', newToken); } catch {}
+    try {
+      if (Platform.OS === 'web') {
+        localStorage.setItem('token', newToken);
+      } else {
+        await SecureStore.setItemAsync('token', newToken);
+      }
+    } catch {}
     setToken(newToken);
     setUser(newUser);
   };

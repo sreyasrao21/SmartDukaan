@@ -53,6 +53,12 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(passport.initialize());
 
+// HTTP Request Logger Middleware
+app.use((req, _res, next) => {
+    console.log(`[HTTP] ${req.method} ${req.url}`);
+    next();
+});
+
 // Attach socket to request
 app.use((req: any, res, next) => {
     req.io = io;

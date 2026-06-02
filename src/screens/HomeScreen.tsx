@@ -1,8 +1,7 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Dimensions, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Dimensions } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
-import { spacing } from '../theme';
 
 const { width } = Dimensions.get('window');
 const CARD_W = (width - 48) / 2;
@@ -72,7 +71,7 @@ const BillingProductCard = React.memo(({ product }: any) => {
 });
 
 export default function HomeScreen() {
-  const { colors, isDark } = useTheme();
+  const { isDark } = useTheme();
   const [search, setSearch] = React.useState('');
   const [selectedCat, setSelectedCat] = React.useState(0);
 

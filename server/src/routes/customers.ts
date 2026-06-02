@@ -20,8 +20,9 @@ router.get('/aggregated-khata/:phoneNumber', auth, async (req, res) => {
         const accounts = await CustomerAccount.find({ customerId: customer._id });
         const totalBalance = accounts.reduce((sum, acc: any) => sum + (acc.balance || 0), 0);
 
+        const customerObj = customer.toObject ? customer.toObject() : customer;
         res.json({
-            ...customer._doc,
+            ...customerObj,
             aggregatedKhataBalance: totalBalance,
             accountCount: accounts.length
         });
@@ -39,11 +40,14 @@ router.get('/', auth, async (req, res) => {
         // Map to a friendlier format for the frontend, filtering out null customers
         const customers = accounts
             .filter((acc: any) => acc.customerId) // Filter out null/undefined customerIds
-            .map((acc: any) => ({
-                ...(acc.customerId as any)._doc,
-                khataBalance: acc.balance,
-                accountId: acc._id
-            }));
+            .map((acc: any) => {
+                const customerObj = (acc.customerId as any).toObject ? (acc.customerId as any).toObject() : acc.customerId;
+                return {
+                    ...customerObj,
+                    khataBalance: acc.balance,
+                    accountId: acc._id
+                };
+            });
 
         res.json(customers);
     } catch (err: any) {
@@ -75,8 +79,9 @@ router.get('/search', auth, async (req, res) => {
                 shopkeeperId: req.auth?.userId
             });
 
+            const customerObj = customer.toObject ? customer.toObject() : customer;
             return {
-                ...customer._doc,
+                ...customerObj,
                 khataBalance: account ? account.balance : 0,
                 isLocal: !!account
             };
@@ -108,8 +113,9 @@ router.get('/:phoneNumber', auth, async (req, res) => {
             shopkeeperId: req.auth?.userId
         });
 
+        const customerObj = customer.toObject ? customer.toObject() : customer;
         res.json({
-            ...customer._doc,
+            ...customerObj,
             khataBalance: account ? account.balance : 0
         });
     } catch (err: any) {
@@ -178,8 +184,9 @@ router.post('/', auth, async (req, res) => {
             sendGenericMessage(normalizedPhone, welcomeMsg, 'whatsapp').catch(console.error);
         }
 
+        const customerObj = customer.toObject ? customer.toObject() : customer;
         res.json({
-            ...customer._doc,
+            ...customerObj,
             khataBalance: account.balance
         });
     } catch (err: any) {
@@ -216,6 +223,7 @@ router.patch('/:id', auth, async (req, res) => {
         res.status(400).json({ message: err.message });
     }
 });
+
 // Seed customers
 router.post('/seed', auth, async (req, res) => {
     try {

@@ -55,3 +55,8 @@ android/.gradle/
 ios/App/build/
 ios/App/Pods/
 session-ses_31cb.md
+
+# Scratch and diagnostic scripts
+scratch/
+server/check-db.cjs
+server/check-db.js

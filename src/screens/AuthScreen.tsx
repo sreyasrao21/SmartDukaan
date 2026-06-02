@@ -19,7 +19,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 
 export default function AuthScreen() {
-  const { colors, isDark } = useTheme();
+  const { isDark } = useTheme();
   const { login } = useAuth();
   const { addToast } = useToast();
   const [isLogin, setIsLogin] = useState(true);

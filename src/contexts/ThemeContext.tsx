@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 
 export interface ThemeColors {
   background: string;
@@ -124,24 +125,43 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [isDark, setIsDark] = useState(true);
 
   useEffect(() => {
-    SecureStore.getItemAsync('theme').then((val) => {
-      if (val === 'light' || val === 'dark') {
-        setIsDark(val === 'dark');
-      }
-    }).catch(() => {});
+    const loadTheme = async () => {
+      try {
+        let val = null;
+        if (Platform.OS === 'web') {
+          val = localStorage.getItem('theme');
+        } else {
+          val = await SecureStore.getItemAsync('theme');
+        }
+        if (val === 'light' || val === 'dark') {
+          setIsDark(val === 'dark');
+        }
+      } catch {}
+    };
+    loadTheme();
   }, []);
 
   const toggleTheme = useCallback(() => {
     setIsDark(prev => {
       const next = !prev;
-      SecureStore.setItemAsync('theme', next ? 'dark' : 'light').catch(() => {});
+      const themeVal = next ? 'dark' : 'light';
+      if (Platform.OS === 'web') {
+        try { localStorage.setItem('theme', themeVal); } catch {}
+      } else {
+        SecureStore.setItemAsync('theme', themeVal).catch(() => {});
+      }
       return next;
     });
   }, []);
 
   const setDark = useCallback((val: boolean) => {
     setIsDark(val);
-    SecureStore.setItemAsync('theme', val ? 'dark' : 'light').catch(() => {});
+    const themeVal = val ? 'dark' : 'light';
+    if (Platform.OS === 'web') {
+      try { localStorage.setItem('theme', themeVal); } catch {}
+    } else {
+      SecureStore.setItemAsync('theme', themeVal).catch(() => {});
+    }
   }, []);
 
   const colors = isDark ? darkColors : lightColors;
