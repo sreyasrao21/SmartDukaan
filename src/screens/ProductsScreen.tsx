@@ -154,7 +154,16 @@ export default function ProductsScreen() {
   const [showOcrReview, setShowOcrReview] = useState(false);
   const [isProcessingOcr, setIsProcessingOcr] = useState(false);
 
-  const [supplierBillHistory, setSupplierBillHistory] = useState([
+  interface SupplierBill {
+    id: string;
+    invoiceId: string;
+    supplier: string;
+    date: string;
+    itemsSummary: string;
+    totalValue: string;
+    items: OcrItem[];
+  }
+  const [supplierBillHistory, setSupplierBillHistory] = useState<SupplierBill[]>([
     {
       id: 'SB-1001',
       invoiceId: 'Invoice #SB-1001',
@@ -162,8 +171,15 @@ export default function ProductsScreen() {
       date: 'May 28, 2026',
       itemsSummary: 'Fortune Oil +10 L, Tata Salt +20 kg',
       totalValue: '₹3,260',
+      items: [
+        { id: 'sb1001-1', name: 'Fortune Oil', qty: 10, unit: 'L', total: 1500, costPrice: 150, sellPrice: 165 },
+        { id: 'sb1001-2', name: 'Tata Salt', qty: 20, unit: 'KG', total: 400, costPrice: 20, sellPrice: 22 },
+        { id: 'sb1001-3', name: 'Aashirvaad Flour', qty: 30, unit: 'KG', total: 1200, costPrice: 40, sellPrice: 45 },
+        { id: 'sb1001-4', name: 'Surf Excel', qty: 15, unit: 'KG', total: 160, costPrice: 110, sellPrice: 120 },
+      ],
     },
   ]);
+  const [selectedHistoryBill, setSelectedHistoryBill] = useState<SupplierBill | null>(null);
 
   const loadProducts = useCallback(async (showLoader = false) => {
     if (showLoader) setLoading(true);
@@ -488,13 +504,15 @@ export default function ProductsScreen() {
         .join(', ');
 
       const nextBillNo = supplierBillHistory.length + 1001; // e.g. SB-1002
-      const newBill = {
+      const savedItems: OcrItem[] = ocrScannedItems.map(item => ({ ...item }));
+      const newBill: SupplierBill = {
         id: `SB-${nextBillNo}`,
         invoiceId: `Invoice #SB-${nextBillNo}`,
         supplier: 'Balaji Wholesale Foods',
         date: 'Today, ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         itemsSummary: itemsSummaryText.length > 40 ? itemsSummaryText.substring(0, 37) + '...' : itemsSummaryText,
         totalValue: `₹${totalBillCost.toLocaleString()}`,
+        items: savedItems,
       };
 
       setSupplierBillHistory(prev => [newBill, ...prev]);
@@ -830,7 +848,12 @@ export default function ProductsScreen() {
             {activeSupplierTab === 'History' && (
               <View style={s.historyTabContent}>
                 {supplierBillHistory.map((bill) => (
-                  <View key={bill.id} style={[s.historyItem, { backgroundColor: isDark ? '#1E293B' : '#FFFFFF' }]}>
+                  <TouchableOpacity
+                    key={bill.id}
+                    activeOpacity={0.75}
+                    onPress={() => setSelectedHistoryBill(bill)}
+                    style={[s.historyItem, { backgroundColor: isDark ? '#1E293B' : '#FFFFFF' }]}
+                  >
                     <View style={s.historyLeft}>
                       <View style={[s.historyIconBox, { backgroundColor: isDark ? '#334155' : '#F1F5F9' }]}>
                         <MaterialCommunityIcons name="file-document-outline" size={22} color={isDark ? '#94A3B8' : '#718096'} />
@@ -843,8 +866,12 @@ export default function ProductsScreen() {
                     <View style={s.historyRight}>
                       <Text style={s.historyVal}>{bill.totalValue}</Text>
                       <Text style={s.historyQty}>{bill.itemsSummary}</Text>
+                      <View style={s.historyViewBadge}>
+                        <MaterialCommunityIcons name="chevron-right" size={14} color="#3B82F6" />
+                        <Text style={s.historyViewText}>View</Text>
+                      </View>
                     </View>
-                  </View>
+                  </TouchableOpacity>
                 ))}
               </View>
             )}
@@ -1009,6 +1036,161 @@ export default function ProductsScreen() {
                       <>
                         <MaterialCommunityIcons name="file-document-outline" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
                         <Text style={s.processOcrBtnText}>PROCESS</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          )}
+
+          {/* ─── History Bill Detail Popup ─── */}
+          {selectedHistoryBill !== null && (
+            <View style={[StyleSheet.absoluteFill, s.loaderOverlay, { zIndex: 10001 }]}>
+              <TouchableOpacity
+                style={StyleSheet.absoluteFillObject}
+                activeOpacity={1}
+                onPress={() => setSelectedHistoryBill(null)}
+              />
+
+              <View style={s.historyDetailCard}>
+                {/* Card Header */}
+                <View style={s.historyDetailHeader}>
+                  <View style={s.historyDetailHeaderLeft}>
+                    <View style={s.historyDetailIconWrap}>
+                      <MaterialCommunityIcons name="file-document-multiple-outline" size={20} color="#3B82F6" />
+                    </View>
+                    <View>
+                      <Text style={s.historyDetailInvoiceId}>{selectedHistoryBill.invoiceId}</Text>
+                      <Text style={s.historyDetailSupplier}>{selectedHistoryBill.supplier} • {selectedHistoryBill.date}</Text>
+                    </View>
+                  </View>
+                  <TouchableOpacity onPress={() => setSelectedHistoryBill(null)} style={s.historyDetailCloseBtn}>
+                    <MaterialCommunityIcons name="close" size={18} color="#64748B" />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Total Banner */}
+                <View style={s.historyDetailTotalBanner}>
+                  <Text style={s.historyDetailTotalLabel}>TOTAL INVOICE VALUE</Text>
+                  <Text style={s.historyDetailTotalValue}>{selectedHistoryBill.totalValue}</Text>
+                </View>
+
+                {/* Items Table Header */}
+                <View style={s.historyDetailTableHeader}>
+                  <Text style={[s.historyDetailColHead, { flex: 2 }]}>PRODUCT</Text>
+                  <Text style={[s.historyDetailColHead, { flex: 0.6, textAlign: 'center' }]}>QTY</Text>
+                  <Text style={[s.historyDetailColHead, { flex: 0.7, textAlign: 'center' }]}>UNIT</Text>
+                  <Text style={[s.historyDetailColHead, { flex: 1, textAlign: 'right' }]}>COST</Text>
+                  <Text style={[s.historyDetailColHead, { flex: 1, textAlign: 'right' }]}>SELL</Text>
+                  <Text style={[s.historyDetailColHead, { flex: 1, textAlign: 'right' }]}>TOTAL</Text>
+                </View>
+
+                {/* Items Scroll */}
+                <ScrollView style={s.historyDetailScroll} contentContainerStyle={{ paddingBottom: 8 }}>
+                  {selectedHistoryBill.items.map((item, idx) => (
+                    <View
+                      key={item.id}
+                      style={[s.historyDetailRow, idx % 2 === 0 && s.historyDetailRowAlt]}
+                    >
+                      <View style={{ flex: 2, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <View style={s.historyDetailRowDot} />
+                        <Text style={s.historyDetailItemName} numberOfLines={1}>{item.name}</Text>
+                      </View>
+                      <Text style={[s.historyDetailCell, { flex: 0.6, textAlign: 'center' }]}>{item.qty}</Text>
+                      <View style={{ flex: 0.7, alignItems: 'center', justifyContent: 'center' }}>
+                        <View style={s.historyDetailUnitBadge}>
+                          <Text style={s.historyDetailUnitText}>{item.unit}</Text>
+                        </View>
+                      </View>
+                      <Text style={[s.historyDetailCell, { flex: 1, textAlign: 'right' }]}>₹{item.costPrice}</Text>
+                      <Text style={[s.historyDetailCellSell, { flex: 1, textAlign: 'right' }]}>₹{item.sellPrice}</Text>
+                      <Text style={[s.historyDetailCellTotal, { flex: 1, textAlign: 'right' }]}>₹{item.total}</Text>
+                    </View>
+                  ))}
+                </ScrollView>
+
+                <View style={s.historyDetailDivider} />
+
+                {/* Action Buttons */}
+                <View style={s.historyDetailActions}>
+                  {/* Edit & Re-Review: loads items back into the OCR spreadsheet */}
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    style={s.historyDetailBtnSecondary}
+                    onPress={() => {
+                      const cloned: OcrItem[] = selectedHistoryBill.items.map(item => ({
+                        ...item,
+                        id: `reload-${item.id}-${Date.now()}`,
+                      }));
+                      setOcrScannedItems(cloned);
+                      setSelectedHistoryBill(null);
+                      setShowOcrReview(true);
+                    }}
+                  >
+                    <MaterialCommunityIcons name="table-edit" size={16} color="#3B82F6" />
+                    <Text style={s.historyDetailBtnSecondaryText}>Edit & Re-Review</Text>
+                  </TouchableOpacity>
+
+                  {/* Re-Process: directly pushes items to inventory */}
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    style={s.historyDetailBtnPrimary}
+                    disabled={isProcessingOcr}
+                    onPress={async () => {
+                      const billRef = selectedHistoryBill;
+                      const cloned: OcrItem[] = billRef.items.map(item => ({ ...item }));
+                      setSelectedHistoryBill(null);
+                      setIsProcessingOcr(true);
+                      try {
+                        for (const item of cloned) {
+                          const matched = products.find(
+                            p => p.name.toLowerCase().trim() === item.name.toLowerCase().trim()
+                          );
+                          if (matched) {
+                            await productApi.update(matched._id, {
+                              price: item.sellPrice,
+                              costPrice: item.costPrice,
+                              stock: matched.stock + item.qty,
+                            });
+                          } else {
+                            let category = 'Grains';
+                            let icon = '🌾';
+                            const nl = item.name.toLowerCase();
+                            if (nl.includes('rice')) { category = 'Grains'; icon = '🌾'; }
+                            else if (nl.includes('dal')) { category = 'Pulses'; icon = '🥣'; }
+                            else if (nl.includes('oil')) { category = 'Oil'; icon = '🛢️'; }
+                            else if (nl.includes('salt')) { category = 'Spices'; icon = '🧂'; }
+                            else if (nl.includes('flour') || nl.includes('atta')) { category = 'Grains'; icon = '🌾'; }
+                            else if (nl.includes('excel') || nl.includes('surf') || nl.includes('soap')) { category = 'Household'; icon = '🧴'; }
+                            await productApi.create({
+                              name: item.name,
+                              price: item.sellPrice,
+                              costPrice: item.costPrice,
+                              stock: item.qty,
+                              unit: item.unit.toLowerCase(),
+                              category,
+                              icon,
+                            });
+                          }
+                        }
+                        await loadProducts();
+                        addToast(`${billRef.invoiceId} re-processed into inventory!`, 'success');
+                        setActiveSupplierTab('History');
+                      } catch (err: any) {
+                        console.error('Re-process failed:', err);
+                        Alert.alert('Re-Process Failed', 'Could not update stock. Please try again.');
+                      } finally {
+                        setIsProcessingOcr(false);
+                      }
+                    }}
+                  >
+                    {isProcessingOcr ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <>
+                        <MaterialCommunityIcons name="refresh" size={16} color="#FFFFFF" />
+                        <Text style={s.historyDetailBtnPrimaryText}>Re-Process Stock</Text>
                       </>
                     )}
                   </TouchableOpacity>
@@ -2395,4 +2577,202 @@ const s = StyleSheet.create({
     color: '#FFFFFF',
     letterSpacing: 0.5,
   },
+
+  // ─── History Item "View" badge ───────────────────────────────────────────
+  historyViewBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    gap: 2,
+  },
+  historyViewText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#3B82F6',
+  },
+
+  // ─── History Bill Detail Popup ───────────────────────────────────────────
+  historyDetailCard: {
+    width: '95%',
+    maxWidth: 680,
+    maxHeight: '82%',
+    borderRadius: 24,
+    backgroundColor: '#1A2333',
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.4,
+    shadowRadius: 24,
+    elevation: 12,
+  },
+  historyDetailHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  historyDetailHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  historyDetailIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(59,130,246,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  historyDetailInvoiceId: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  historyDetailSupplier: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  historyDetailCloseBtn: {
+    padding: 6,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  historyDetailTotalBanner: {
+    backgroundColor: 'rgba(16,185,129,0.08)',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(16,185,129,0.2)',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  historyDetailTotalLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#10B981',
+    letterSpacing: 0.8,
+  },
+  historyDetailTotalValue: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#10B981',
+  },
+  historyDetailTableHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.08)',
+    marginBottom: 2,
+  },
+  historyDetailColHead: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#475569',
+    letterSpacing: 0.6,
+  },
+  historyDetailScroll: {
+    maxHeight: 240,
+  },
+  historyDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.04)',
+  },
+  historyDetailRowAlt: {
+    backgroundColor: 'rgba(255,255,255,0.02)',
+  },
+  historyDetailRowDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#3B82F6',
+    flexShrink: 0,
+  },
+  historyDetailItemName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#E2E8F0',
+    flex: 1,
+  },
+  historyDetailCell: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#94A3B8',
+  },
+  historyDetailCellSell: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FF7E06',
+  },
+  historyDetailCellTotal: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  historyDetailUnitBadge: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 6,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+  },
+  historyDetailUnitText: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#64748B',
+  },
+  historyDetailDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    marginVertical: 14,
+  },
+  historyDetailActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  historyDetailBtnSecondary: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderWidth: 1.5,
+    borderColor: '#3B82F6',
+    borderRadius: 12,
+    paddingVertical: 11,
+  },
+  historyDetailBtnSecondaryText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#3B82F6',
+  },
+  historyDetailBtnPrimary: {
+    flex: 1.4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#2E7D32',
+    borderRadius: 12,
+    paddingVertical: 11,
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  historyDetailBtnPrimaryText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
 });
+
