@@ -137,7 +137,6 @@ export default function ProductsScreen() {
 
   // Supplier Bills / Command Center State
   const [showSupplierBills, setShowSupplierBills] = useState(false);
-  const [showScanMenu, setShowScanMenu] = useState(false);
   const [activeSupplierTab, setActiveSupplierTab] = useState<'Scan' | 'Manual' | 'History'>('Scan');
   const [isOcrScanning, setIsOcrScanning] = useState(false);
   const [scannedResultModal, setScannedResultModal] = useState<{
@@ -319,66 +318,35 @@ export default function ProductsScreen() {
     });
   }, [products, searchTerm]);
 
-  // Handle OCR Document Scanner flow
+  // Handle OCR Document Scanner flow - Directly launches Camera on Phone and Document Picker on Web!
   const handleScanBill = async () => {
-    Alert.alert(
-      'Scan Supplier Bill',
-      'Select purchase invoice source to capture:',
-      [
-        {
-          text: 'Take Photo',
-          onPress: async () => {
-            const { status } = await ImagePicker.requestCameraPermissionsAsync();
-            if (status !== 'granted') {
-              Alert.alert('Permission Denied', 'Camera access is required to scan bills.');
-              return;
-            }
-            const result = await ImagePicker.launchCameraAsync({
-              allowsEditing: true,
-              quality: 0.8,
-            });
-            if (!result.canceled && result.assets && result.assets.length > 0) {
-              processScannedBill();
-            }
-          },
-        },
-        {
-          text: 'Choose Image from Gallery',
-          onPress: async () => {
-            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-            if (status !== 'granted') {
-              Alert.alert('Permission Denied', 'Media library access is required.');
-              return;
-            }
-            const result = await ImagePicker.launchImageLibraryAsync({
-              allowsEditing: true,
-              quality: 0.8,
-            });
-            if (!result.canceled && result.assets && result.assets.length > 0) {
-              processScannedBill();
-            }
-          },
-        },
-        {
-          text: 'Upload PDF Document',
-          onPress: async () => {
-            try {
-              const result = await DocumentPicker.getDocumentAsync({
-                type: ['application/pdf', 'image/*'],
-                copyToCacheDirectory: true,
-              });
-              if (!result.canceled && result.assets && result.assets.length > 0) {
-                processScannedBill();
-              }
-            } catch (err) {
-              console.error('Failed to select document:', err);
-              addToast('Failed to select document', 'error');
-            }
-          },
-        },
-        { text: 'Cancel', style: 'cancel' },
-      ]
-    );
+    if (Platform.OS === 'web') {
+      try {
+        const result = await DocumentPicker.getDocumentAsync({
+          type: ['application/pdf', 'image/*'],
+          copyToCacheDirectory: true,
+        });
+        if (!result.canceled && result.assets && result.assets.length > 0) {
+          processScannedBill();
+        }
+      } catch (err) {
+        console.error('Failed to select document:', err);
+        addToast('Failed to select document', 'error');
+      }
+    } else {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Camera access is required to scan bills.');
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        processScannedBill();
+      }
+    }
   };
 
   const processScannedBill = () => {
@@ -772,113 +740,7 @@ export default function ProductsScreen() {
             )}
           </ScrollView>
 
-          {/* Custom Scan Bill Action Sheet Modal (Nested absolute View overlay for 100% Web & Mobile compatibility!) */}
-          {showScanMenu && (
-            <View style={[StyleSheet.absoluteFill, s.modalOverlay, { zIndex: 9999 }]}>
-              <TouchableOpacity
-                style={StyleSheet.absoluteFillObject}
-                activeOpacity={1}
-                onPress={() => setShowScanMenu(false)}
-              />
-              <View style={[s.actionSheetCard, { backgroundColor: isDark ? '#1E293B' : '#FFFFFF' }]}>
-                <View style={s.actionSheetHeader}>
-                  <Text style={[s.actionSheetTitle, { color: isDark ? '#FFFFFF' : '#1E293B' }]}>
-                    Select Bill Source
-                  </Text>
-                  <TouchableOpacity onPress={() => setShowScanMenu(false)}>
-                    <MaterialCommunityIcons name="close" size={20} color="#94A3B8" />
-                  </TouchableOpacity>
-                </View>
 
-                <View style={s.actionSheetBody}>
-                  {/* Option 1: Take Photo */}
-                  <TouchableOpacity
-                    activeOpacity={0.7}
-                    style={[s.actionSheetRow, { borderBottomColor: isDark ? 'rgba(255,255,255,0.05)' : '#F3F4F6' }]}
-                    onPress={async () => {
-                      setShowScanMenu(false);
-                      const { status } = await ImagePicker.requestCameraPermissionsAsync();
-                      if (status !== 'granted') {
-                        Alert.alert('Permission Denied', 'Camera access is required to scan bills.');
-                        return;
-                      }
-                      const result = await ImagePicker.launchCameraAsync({
-                        allowsEditing: true,
-                        quality: 0.8,
-                      });
-                      if (!result.canceled && result.assets && result.assets.length > 0) {
-                        processScannedBill();
-                      }
-                    }}
-                  >
-                    <View style={[s.actionSheetIconBox, { backgroundColor: '#ECFDF4' }]}>
-                      <MaterialCommunityIcons name="camera" size={20} color="#10B981" />
-                    </View>
-                    <Text style={[s.actionSheetText, { color: isDark ? '#F1F5F9' : '#334155' }]}>Take Photo</Text>
-                  </TouchableOpacity>
-
-                  {/* Option 2: Choose Image */}
-                  <TouchableOpacity
-                    activeOpacity={0.7}
-                    style={[s.actionSheetRow, { borderBottomColor: isDark ? 'rgba(255,255,255,0.05)' : '#F3F4F6' }]}
-                    onPress={async () => {
-                      setShowScanMenu(false);
-                      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-                      if (status !== 'granted') {
-                        Alert.alert('Permission Denied', 'Media library access is required.');
-                        return;
-                      }
-                      const result = await ImagePicker.launchImageLibraryAsync({
-                        allowsEditing: true,
-                        quality: 0.8,
-                      });
-                      if (!result.canceled && result.assets && result.assets.length > 0) {
-                        processScannedBill();
-                      }
-                    }}
-                  >
-                    <View style={[s.actionSheetIconBox, { backgroundColor: '#EFF6FF' }]}>
-                      <MaterialCommunityIcons name="image" size={20} color="#3B82F6" />
-                    </View>
-                    <Text style={[s.actionSheetText, { color: isDark ? '#F1F5F9' : '#334155' }]}>Choose from Gallery</Text>
-                  </TouchableOpacity>
-
-                  {/* Option 3: Upload PDF */}
-                  <TouchableOpacity
-                    activeOpacity={0.7}
-                    style={s.actionSheetRow}
-                    onPress={async () => {
-                      setShowScanMenu(false);
-                      try {
-                        const result = await DocumentPicker.getDocumentAsync({
-                          type: ['application/pdf', 'image/*'],
-                          copyToCacheDirectory: true,
-                        });
-                        if (!result.canceled && result.assets && result.assets.length > 0) {
-                          processScannedBill();
-                        }
-                      } catch (err) {
-                        console.error('Failed to select document:', err);
-                        addToast('Failed to select document', 'error');
-                      }
-                    }}
-                  >
-                    <View style={[s.actionSheetIconBox, { backgroundColor: '#FEF3C7' }]}>
-                      <MaterialCommunityIcons name="file-pdf-box" size={20} color="#D97706" />
-                    </View>
-                    <Text style={[s.actionSheetText, { color: isDark ? '#F1F5F9' : '#334155' }]}>Upload PDF Document</Text>
-                  </TouchableOpacity>
-                </View>
-
-                <TouchableOpacity
-                  style={[s.actionSheetCancelBtn, { backgroundColor: isDark ? '#334155' : '#F1F5F9' }]}
-                  onPress={() => setShowScanMenu(false)}
-                >
-                  <Text style={[s.actionSheetCancelText, { color: isDark ? '#94A3B8' : '#718096' }]}>Cancel</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
 
           {/* OCR Document Scanner Visual Loading Indicator */}
           {isOcrScanning && (
