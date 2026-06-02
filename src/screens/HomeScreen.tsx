@@ -1,10 +1,10 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
 
-const { width } = Dimensions.get('window');
-const CARD_W = (width - 48) / 2;
+import { useWindowDimensions } from 'react-native';
+
 
 const PRODUCTS = [
   { _id: '1', name: 'Basmati Rice', icon: '🍚', price: 120, unit: 'kg', stock: 50, category: 'Grocery' },
@@ -28,7 +28,7 @@ const CATS = [
   { key: 'Personal Care', icon: '🧴' },
 ];
 
-const BillingProductCard = React.memo(({ product }: any) => {
+const BillingProductCard = React.memo(({ product, cardWidth }: any) => {
   const { colors } = useTheme();
   const isOutOfStock = product.stock <= 0;
   const lowStock = product.stock <= 3 && product.stock > 0;
@@ -40,7 +40,7 @@ const BillingProductCard = React.memo(({ product }: any) => {
   else { badgeText = 'Popular'; badgeBg = '#10B981'; }
 
   return (
-    <View style={[s.card, isOutOfStock && s.cardOutOfStock]}>
+    <View style={[s.card, isOutOfStock && s.cardOutOfStock, { width: cardWidth }]}>
       {!isOutOfStock && (
         <View style={[s.badge, { backgroundColor: badgeBg }]}>
           <Text style={s.badgeText}>{badgeText}</Text>
@@ -71,6 +71,8 @@ const BillingProductCard = React.memo(({ product }: any) => {
 });
 
 export default function HomeScreen() {
+  const { width } = useWindowDimensions();
+  const cardWidth = (width - 48) / 2;
   const { isDark } = useTheme();
   const [search, setSearch] = React.useState('');
   const [selectedCat, setSelectedCat] = React.useState(0);
@@ -147,7 +149,7 @@ export default function HomeScreen() {
         <View style={s.gridSection}>
           <View style={s.grid}>
             {filtered.map((product) => (
-              <BillingProductCard key={product._id} product={product} />
+              <BillingProductCard key={product._id} product={product} cardWidth={cardWidth} />
             ))}
             {filtered.length === 0 && (
               <View style={s.emptyState}>
@@ -204,7 +206,6 @@ const s = StyleSheet.create({
   gridSection: { paddingHorizontal: 12, marginTop: -24, zIndex: 10 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   card: {
-    width: CARD_W,
     backgroundColor: 'rgba(254,249,195,0.8)',
     padding: 16,
     borderRadius: 24,
