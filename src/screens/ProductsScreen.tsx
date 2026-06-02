@@ -113,51 +113,16 @@ export default function ProductsScreen() {
   const { user } = useAuth();
 
   // ─── Animated scroll header ───────────────────────────────────────────────
+  const HEADER_HEIGHT = 190;          // approximate rendered header height
   const scrollY = useRef(new Animated.Value(0)).current;
 
-  // Clamp scroll so animation reverses on scroll-up
-  const clampedScroll = Animated.diffClamp(scrollY, 0, 90);
+  // clamp so reverse-scroll brings header back immediately
+  const clampedScroll = Animated.diffClamp(scrollY, 0, HEADER_HEIGHT);
 
-  // Header container shrinks from full paddingBottom to compact
-  const headerPaddingBottom = clampedScroll.interpolate({
-    inputRange: [0, 90],
-    outputRange: [40, 14],
-    extrapolate: 'clamp',
-  });
-
-  // Title row fades + slides up
-  const titleOpacity = clampedScroll.interpolate({
-    inputRange: [0, 50],
-    outputRange: [1, 0],
-    extrapolate: 'clamp',
-  });
-  const titleTranslateY = clampedScroll.interpolate({
-    inputRange: [0, 50],
-    outputRange: [0, -20],
-    extrapolate: 'clamp',
-  });
-
-  // Badge fades earlier
-  const badgeOpacity = clampedScroll.interpolate({
-    inputRange: [0, 30],
-    outputRange: [1, 0],
-    extrapolate: 'clamp',
-  });
-
-  // Add-to-Stock button shrinks + fades
-  const btnOpacity = clampedScroll.interpolate({
-    inputRange: [0, 60],
-    outputRange: [1, 0],
-    extrapolate: 'clamp',
-  });
-  const btnHeight = clampedScroll.interpolate({
-    inputRange: [0, 60],
-    outputRange: [44, 0],
-    extrapolate: 'clamp',
-  });
-  const btnMarginBottom = clampedScroll.interpolate({
-    inputRange: [0, 60],
-    outputRange: [20, 0],
+  // The whole header translates up by its own height
+  const headerTranslateY = clampedScroll.interpolate({
+    inputRange:  [0, HEADER_HEIGHT],
+    outputRange: [0, -HEADER_HEIGHT],
     extrapolate: 'clamp',
   });
   // ─────────────────────────────────────────────────────────────────────────
@@ -599,50 +564,39 @@ export default function ProductsScreen() {
 
   return (
     <View style={[s.container, { backgroundColor: isDark ? '#0F172A' : '#F8FAFC' }]}>
-      {/* Animated Orange-to-Yellow Curved Command Header */}
-      <LinearGradient
-        colors={['#FFD200', '#FF7E06']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-        style={s.orangeHeaderBase}
+
+      {/* ── Whole yellow header slides up as one unit ── */}
+      <Animated.View
+        style={[
+          s.headerWrapper,
+          { transform: [{ translateY: headerTranslateY }] },
+        ]}
       >
-        <Animated.View style={{ paddingBottom: headerPaddingBottom }}>
-          {/* Title row — fades + slides up on scroll */}
-          <Animated.View
-            style={[
-              s.headerInnerTitleRow,
-              { opacity: titleOpacity, transform: [{ translateY: titleTranslateY }] },
-            ]}
-          >
+        <LinearGradient
+          colors={['#FFD200', '#FF7E06']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={s.orangeHeaderBase}
+        >
+          <View style={s.headerInnerTitleRow}>
             <Text style={s.headerTitleMain}>Products 📦</Text>
-            <Animated.View style={[s.inventoryBadge, { opacity: badgeOpacity }]}>
+            <View style={s.inventoryBadge}>
               <Text style={s.inventoryBadgeText}>INVENTORY COMMAND CENTER</Text>
-            </Animated.View>
-          </Animated.View>
+            </View>
+          </View>
 
-          {/* Add-to-Stock button — collapses height + fades */}
-          <Animated.View
-            style={{
-              overflow: 'hidden',
-              height: btnHeight,
-              opacity: btnOpacity,
-              marginBottom: btnMarginBottom,
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => {
+              setActiveSupplierTab('Scan');
+              setShowSupplierBills(true);
             }}
+            style={s.addStockBtn}
           >
-            <TouchableOpacity
-              activeOpacity={0.9}
-              onPress={() => {
-                setActiveSupplierTab('Scan');
-                setShowSupplierBills(true);
-              }}
-              style={s.addStockBtn}
-            >
-              <MaterialCommunityIcons name="plus" size={18} color="#000000" />
-              <Text style={s.addStockBtnText}>Add to Stock</Text>
-            </TouchableOpacity>
-          </Animated.View>
+            <MaterialCommunityIcons name="plus" size={18} color="#000000" />
+            <Text style={s.addStockBtnText}>Add to Stock</Text>
+          </TouchableOpacity>
 
-          {/* Search bar — always visible */}
           <View style={s.searchBarContainer}>
             <TextInput
               style={s.searchInput}
@@ -652,10 +606,10 @@ export default function ProductsScreen() {
               onChangeText={setSearchTerm}
             />
           </View>
-        </Animated.View>
-      </LinearGradient>
+        </LinearGradient>
+      </Animated.View>
 
-      {/* Main Catalog Body */}
+      {/* Main Catalog Body — sits behind header, padded so first item is visible */}
       <KeyboardAvoidingView
         style={s.mainBody}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -682,7 +636,7 @@ export default function ProductsScreen() {
               />
             )}
             ListHeaderComponent={listHeader}
-            contentContainerStyle={s.listContent}
+            contentContainerStyle={[s.listContent, { paddingTop: HEADER_HEIGHT }]}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#FF7E06" />
             }
@@ -1530,15 +1484,22 @@ const s = StyleSheet.create({
   container: { flex: 1 },
   orangeHeaderBase: {
     paddingTop: 20,
+    paddingBottom: 40,
     paddingHorizontal: 20,
     borderBottomLeftRadius: 36,
     borderBottomRightRadius: 36,
     shadowColor: '#FF7E06',
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 6,
-    overflow: 'hidden',
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  headerWrapper: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 100,
   },
   headerInnerTitleRow: {
     flexDirection: 'column',
