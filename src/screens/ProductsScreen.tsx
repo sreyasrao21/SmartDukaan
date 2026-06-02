@@ -21,6 +21,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useLanguage } from '../contexts/LanguageContext';
 import { productApi } from '../services/api';
 import { spacing } from '../theme';
 
@@ -111,6 +112,8 @@ export default function ProductsScreen() {
   const { isDark } = useTheme();
   const { addToast } = useToast();
   const { user } = useAuth();
+  const { lang, t, languages, setLang, currentLanguage } = useLanguage();
+  const [showLangPicker, setShowLangPicker] = useState(false);
 
   // ─── Animated scroll header ───────────────────────────────────────────────
   const HEADER_HEIGHT = 190;          // approximate rendered header height
@@ -694,9 +697,14 @@ export default function ProductsScreen() {
               </TouchableOpacity>
               <Text style={[s.brand, { color: isDark ? '#FFFFFF' : '#0F172A' }]}>SDukaan</Text>
               <View style={s.headerRight}>
-                <View style={[s.langBtn, { borderColor: isDark ? '#334155' : '#E2E8F0' }]}>
-                  <Text style={[s.langText, { color: isDark ? '#94A3B8' : '#475569' }]}>EN</Text>
-                </View>
+                <TouchableOpacity
+                  onPress={() => setShowLangPicker(true)}
+                  style={[s.langBtn, { borderColor: isDark ? '#334155' : '#E2E8F0' }]}
+                  activeOpacity={0.75}
+                >
+                  <Text style={{ fontSize: 13 }}>{currentLanguage.flag}</Text>
+                  <Text style={[s.langText, { color: isDark ? '#94A3B8' : '#475569' }]}>{lang}</Text>
+                </TouchableOpacity>
                 <TouchableOpacity onPress={() => setShowSupplierBills(false)} style={[s.menuBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }]}>
                   <MaterialCommunityIcons name="arrow-left" size={22} color={isDark ? '#94A3B8' : '#475569'} />
                 </TouchableOpacity>
@@ -710,8 +718,8 @@ export default function ProductsScreen() {
               <MaterialCommunityIcons name="barcode-scan" size={28} color="#3B82F6" />
             </View>
             <View>
-              <Text style={[s.supplierMainTitle, { color: isDark ? '#FFFFFF' : '#1E293B' }]}>Supplier Bills</Text>
-              <Text style={s.supplierSubtitle}>Digitize bills, update stock & track history</Text>
+              <Text style={[s.supplierMainTitle, { color: isDark ? '#FFFFFF' : '#1E293B' }]}>{t('supplierBills')}</Text>
+              <Text style={s.supplierSubtitle}>{t('digitizeBills')}</Text>
             </View>
           </View>
 
@@ -723,7 +731,7 @@ export default function ProductsScreen() {
               style={[s.segmentTab, activeSupplierTab === 'Scan' && s.segmentActiveTab]}
             >
               <Text style={[s.segmentTabText, { color: activeSupplierTab === 'Scan' ? '#FFFFFF' : '#94A3B8' }]}>
-                Scan
+                {t('scan')}
               </Text>
             </TouchableOpacity>
 
@@ -733,7 +741,7 @@ export default function ProductsScreen() {
               style={[s.segmentTab, activeSupplierTab === 'Manual' && s.segmentActiveTab]}
             >
               <Text style={[s.segmentTabText, { color: activeSupplierTab === 'Manual' ? '#FFFFFF' : '#94A3B8' }]}>
-                Manual
+                {t('manual')}
               </Text>
             </TouchableOpacity>
 
@@ -743,7 +751,7 @@ export default function ProductsScreen() {
               style={[s.segmentTab, activeSupplierTab === 'History' && s.segmentActiveTab]}
             >
               <Text style={[s.segmentTabText, { color: activeSupplierTab === 'History' ? '#FFFFFF' : '#94A3B8' }]}>
-                History
+                {t('history')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -1226,6 +1234,79 @@ export default function ProductsScreen() {
               </View>
             </View>
           )}
+        </View>
+      </Modal>
+
+      {/* ─── Language Picker Modal ─── */}
+      <Modal
+        visible={showLangPicker}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowLangPicker(false)}
+      >
+        <View style={s.langModalOverlay}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFillObject}
+            activeOpacity={1}
+            onPress={() => setShowLangPicker(false)}
+          />
+          <View style={[s.langModalCard, { backgroundColor: isDark ? '#1A2333' : '#FFFFFF' }]}>
+            {/* Header */}
+            <View style={s.langModalHeader}>
+              <View style={s.langModalIconWrap}>
+                <MaterialCommunityIcons name="translate" size={20} color="#3B82F6" />
+              </View>
+              <Text style={[s.langModalTitle, { color: isDark ? '#FFFFFF' : '#0F172A' }]}>
+                {t('selectLanguage')}
+              </Text>
+              <TouchableOpacity onPress={() => setShowLangPicker(false)} style={s.langModalClose}>
+                <MaterialCommunityIcons name="close" size={18} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Language Options */}
+            <View style={s.langOptionsList}>
+              {languages.map((language) => {
+                const isSelected = lang === language.code;
+                return (
+                  <TouchableOpacity
+                    key={language.code}
+                    activeOpacity={0.75}
+                    onPress={() => {
+                      setLang(language.code);
+                      setTimeout(() => setShowLangPicker(false), 180);
+                      addToast(
+                        language.code === 'EN' ? 'Language changed!' :
+                        language.code === 'HI' ? 'भाषा बदल गई!' :
+                        language.code === 'TE' ? 'భాష మారింది!' :
+                        language.code === 'TA' ? 'மொழி மாற்றப்பட்டது!' :
+                        'ಭಾಷೆ ಬದಲಾಯಿತು!',
+                        'success'
+                      );
+                    }}
+                    style={[
+                      s.langOption,
+                      isSelected && s.langOptionSelected,
+                      { borderColor: isSelected ? '#3B82F6' : (isDark ? '#1E293B' : '#E2E8F0') },
+                    ]}
+                  >
+                    <Text style={s.langOptionFlag}>{language.flag}</Text>
+                    <View style={s.langOptionText}>
+                      <Text style={[s.langOptionName, { color: isDark ? '#FFFFFF' : '#0F172A' }]}>
+                        {language.name}
+                      </Text>
+                      <Text style={s.langOptionLabel}>{language.label}</Text>
+                    </View>
+                    {isSelected && (
+                      <View style={s.langOptionCheck}>
+                        <MaterialCommunityIcons name="check-circle" size={20} color="#3B82F6" />
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
         </View>
       </Modal>
 
@@ -1997,6 +2078,9 @@ const s = StyleSheet.create({
     paddingVertical: spacing.xs,
     borderRadius: 12,
     borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   langText: {
     fontSize: 10,
@@ -2809,5 +2893,81 @@ const s = StyleSheet.create({
     fontWeight: '800',
     color: '#FFFFFF',
   },
+
+  // ─── Language Picker Modal ─────────────────────────────────────────────────
+  langModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  langModalCard: {
+    width: '88%',
+    maxWidth: 400,
+    borderRadius: 24,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.35,
+    shadowRadius: 20,
+    elevation: 12,
+  },
+  langModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+    gap: 10,
+  },
+  langModalIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: 'rgba(59,130,246,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  langModalTitle: {
+    flex: 1,
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  langModalClose: {
+    padding: 6,
+    borderRadius: 8,
+    backgroundColor: 'rgba(100,116,139,0.1)',
+  },
+  langOptionsList: {
+    gap: 8,
+  },
+  langOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    gap: 12,
+  },
+  langOptionSelected: {
+    backgroundColor: 'rgba(59,130,246,0.08)',
+  },
+  langOptionFlag: {
+    fontSize: 28,
+  },
+  langOptionText: {
+    flex: 1,
+  },
+  langOptionName: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  langOptionLabel: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  langOptionCheck: {
+    marginLeft: 'auto' as any,
+  },
 });
+
 
