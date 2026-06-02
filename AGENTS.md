@@ -7,10 +7,12 @@ Guidance for autonomous coding agents working in this repository.
 - Monorepo-like layout with two Node/TypeScript apps:
   - Frontend app in repo root (`src/`, Vite + React + TS).
   - Backend app in `server/` (`server/src/`, Express + Mongoose + TS).
+  - **React Native mobile app** in `../cognizant-technoverse/SmartDukaan/` (Expo + React Native + TS).
 - Frontend and backend have separate `package.json` files and dependency trees.
 - Primary runtime flow during development:
-  - Frontend on `http://localhost:5174` (Vite strict port).
+  - Web Frontend on `http://localhost:5174` (Vite strict port).
   - Backend on `http://localhost:5000` (Express default).
+  - Mobile app on `http://localhost:8081` (Metro bundler, Expo).
 
 ## 2) Install and Setup
 
@@ -48,6 +50,26 @@ Guidance for autonomous coding agents working in this repository.
   - `npm run start --prefix server`
 - Seed script:
   - `npm run seed --prefix server`
+
+### React Native Mobile App (`../cognizant-technoverse/SmartDukaan/`)
+
+- Dev server:
+  - `npx expo start` (or `npx expo start --clear` to clear cache)
+- Build for Android:
+  - `npx expo export --platform android`
+- Build for iOS:
+  - `npx expo export --platform ios`
+- TypeScript check:
+  - `npx tsc --noEmit`
+
+**Important Notes for RN Development:**
+- Uses React Native components (View, Text, FlatList, etc.) NOT HTML elements
+- Uses StyleSheet.create() for styling
+- Uses @expo/vector-icons (MaterialCommunityIcons) instead of lucide-react
+- Uses expo-secure-store instead of localStorage for token storage
+- Uses expo-image-picker for camera/gallery access
+- No DOM APIs (window, document) allowed
+- Navigation uses @react-navigation/native-stack and @react-navigation/bottom-tabs
 
 ### Test Status (Current State)
 

@@ -83,7 +83,8 @@ router.post('/register', async (req, res) => {
 router.post('/login', async (req, res) => {
     try {
         const { username, password } = req.body;
-        const user = await User.findOne({ username });
+        console.log('[Login] body:', JSON.stringify(req.body), 'username:', username, 'password:', password ? '***' : 'MISSING');
+        const user = await User.findOne({ $or: [{ username }, { email: username }] });
 
         if (!user || !user.password) {
             return res.status(400).json({ message: 'Invalid credentials' });

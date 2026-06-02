@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "Smart Dukaan",
+    "slug": "smart-dukaan",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./src/assets/logo.jpg",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "backgroundColor": "#0a0a0a"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.smartdukaan.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0a0a0a"
+      },
+      "package": "com.smartdukaan.app"
+    },
+    "plugins": [
+      "expo-secure-store"
+    ]
+  }
+}
