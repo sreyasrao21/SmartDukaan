@@ -12,6 +12,7 @@ import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
 import AuthScreen from './src/screens/AuthScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import CustomerScreen from './src/screens/CustomerScreen';
+import ProductsScreen from './src/screens/ProductsScreen';
 import { fontSize, spacing } from './src/theme';
 
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
@@ -191,7 +192,7 @@ function HomeTabs() {
         />
         <Tab.Screen
           name="ProductsTab"
-          component={() => <PlaceholderScreen label="Products" />}
+          component={ProductsScreen}
           options={{
             tabBarIcon: ({ color, focused }) => (
               <View style={[styles.tabIconWrap, focused && styles.tabIconActive]}>
