@@ -21,6 +21,7 @@ import {
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
+import { useLanguage } from '../contexts/LanguageContext';
 import { customerApi, ledgerApi } from '../services/api';
 import { getKhataStatus } from '../lib/khataLogic';
 import { spacing } from '../theme';
@@ -63,6 +64,7 @@ const CustomerCardItem: React.FC<CustomerCardItemProps> = ({
 }) => {
   const { width } = useWindowDimensions();
   const isMobile = width < 550;
+  const { t } = useLanguage();
 
   const pan = useRef(new Animated.ValueXY()).current;
   const khata = getKhataStatus(item.khataBalance, item.khataScore, item.khataLimit);
@@ -340,6 +342,7 @@ const CustomerCardItem: React.FC<CustomerCardItemProps> = ({
 export default function CustomerScreen() {
   const { isDark } = useTheme();
   const { addToast } = useToast();
+  const { t } = useLanguage();
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(false);
@@ -553,7 +556,7 @@ export default function CustomerScreen() {
       <View style={s.gradientHeader}>
         <View style={s.headerInner}>
           <View>
-            <Text style={s.title}>Customers</Text>
+            <Text style={s.title}>{t('navCustomers')}</Text>
             <View style={s.subtitleContainer}>
               <Text style={s.subtitle}>NETWORK RELATIONSHIP MANAGER</Text>
             </View>
@@ -572,7 +575,7 @@ export default function CustomerScreen() {
           <View style={s.searchBar}>
             <TextInput
               style={s.searchInput}
-              placeholder="Search by name or phone"
+              placeholder={t('searchCustomers')}
               placeholderTextColor="#94A3B8"
               value={searchTerm}
               onChangeText={setSearchTerm}
@@ -588,7 +591,7 @@ export default function CustomerScreen() {
       >
         {showForm && (
           <View style={s.formCard}>
-            <Text style={s.formTitle}>Register New Member</Text>
+            <Text style={s.formTitle}>{t('addCustomer')}</Text>
             <View style={s.formFields}>
               <TextInput
                 style={s.formInput}

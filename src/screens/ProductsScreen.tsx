@@ -112,11 +112,10 @@ export default function ProductsScreen() {
   const { isDark } = useTheme();
   const { addToast } = useToast();
   const { user } = useAuth();
-  const { lang, t, languages, setLang, currentLanguage } = useLanguage();
-  const [showLangPicker, setShowLangPicker] = useState(false);
+  const { lang, t, languages, setLang, currentLanguage, setShowLangPicker } = useLanguage();
 
   // ─── Animated scroll header ───────────────────────────────────────────────
-  const HEADER_HEIGHT = 190;          // approximate rendered header height
+  const HEADER_HEIGHT = 240;          // approximate rendered header height
   const scrollY = useRef(new Animated.Value(0)).current;
 
   // clamp so reverse-scroll brings header back immediately
@@ -1269,78 +1268,7 @@ export default function ProductsScreen() {
         </View>
       </Modal>
 
-      {/* ─── Language Picker Modal ─── */}
-      <Modal
-        visible={showLangPicker}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowLangPicker(false)}
-      >
-        <View style={s.langModalOverlay}>
-          <TouchableOpacity
-            style={StyleSheet.absoluteFillObject}
-            activeOpacity={1}
-            onPress={() => setShowLangPicker(false)}
-          />
-          <View style={[s.langModalCard, { backgroundColor: isDark ? '#1A2333' : '#FFFFFF' }]}>
-            {/* Header */}
-            <View style={s.langModalHeader}>
-              <View style={s.langModalIconWrap}>
-                <MaterialCommunityIcons name="translate" size={20} color="#3B82F6" />
-              </View>
-              <Text style={[s.langModalTitle, { color: isDark ? '#FFFFFF' : '#0F172A' }]}>
-                {t('selectLanguage')}
-              </Text>
-              <TouchableOpacity onPress={() => setShowLangPicker(false)} style={s.langModalClose}>
-                <MaterialCommunityIcons name="close" size={18} color="#64748B" />
-              </TouchableOpacity>
-            </View>
 
-            {/* Language Options */}
-            <View style={s.langOptionsList}>
-              {languages.map((language) => {
-                const isSelected = lang === language.code;
-                return (
-                  <TouchableOpacity
-                    key={language.code}
-                    activeOpacity={0.75}
-                    onPress={() => {
-                      setLang(language.code);
-                      setTimeout(() => setShowLangPicker(false), 180);
-                      addToast(
-                        language.code === 'EN' ? 'Language changed!' :
-                        language.code === 'HI' ? 'भाषा बदल गई!' :
-                        language.code === 'TE' ? 'భాష మారింది!' :
-                        language.code === 'TA' ? 'மொழி மாற்றப்பட்டது!' :
-                        'ಭಾಷೆ ಬದಲಾಯಿತು!',
-                        'success'
-                      );
-                    }}
-                    style={[
-                      s.langOption,
-                      isSelected && s.langOptionSelected,
-                      { borderColor: isSelected ? '#3B82F6' : (isDark ? '#1E293B' : '#E2E8F0') },
-                    ]}
-                  >
-                    <Text style={s.langOptionFlag}>{language.flag}</Text>
-                    <View style={s.langOptionText}>
-                      <Text style={[s.langOptionName, { color: isDark ? '#FFFFFF' : '#0F172A' }]}>
-                        {language.name}
-                      </Text>
-                      <Text style={s.langOptionLabel}>{language.label}</Text>
-                    </View>
-                    {isSelected && (
-                      <View style={s.langOptionCheck}>
-                        <MaterialCommunityIcons name="check-circle" size={20} color="#3B82F6" />
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       {/* Manual Quick Stock & Price Editor Modal */}
       <Modal

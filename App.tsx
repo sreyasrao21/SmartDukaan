@@ -9,11 +9,12 @@ import { StatusBar } from 'expo-status-bar';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import { ToastProvider } from './src/contexts/ToastContext';
 import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
-import { LanguageProvider } from './src/contexts/LanguageContext';
+import { LanguageProvider, useLanguage } from './src/contexts/LanguageContext';
 import AuthScreen from './src/screens/AuthScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import CustomerScreen from './src/screens/CustomerScreen';
 import ProductsScreen from './src/screens/ProductsScreen';
+import GlobalLanguageModal from './src/components/GlobalLanguageModal';
 import { fontSize, spacing } from './src/theme';
 
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
@@ -26,23 +27,19 @@ function DashboardHeader() {
   const { user, logout } = useAuth();
   const [showMenu, setShowMenu] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const [language, setLanguage] = useState('en');
-
-  const toggleLanguage = () => {
-    setLanguage(prev => prev === 'en' ? 'hi' : prev === 'hi' ? 'te' : 'en');
-  };
+  const { t, lang, setShowLangPicker } = useLanguage();
 
   const navLinks: { path: string; label: string; icon: IconName }[] = [
-    { path: 'BillingTab', label: 'Billing', icon: 'store' },
-    { path: 'ProductsTab', label: 'Products', icon: 'package' },
-    { path: 'CustomersTab', label: 'Customers', icon: 'account-group' },
-    { path: 'RecoveryTab', label: 'Recovery Agent', icon: 'phone' },
-    { path: 'RecordsTab', label: 'Records', icon: 'book-open-variant' },
-    { path: 'KhataTab', label: 'Udhaar', icon: 'credit-card' },
-    { path: 'DealsTab', label: 'Group Buy', icon: 'gift' },
-    { path: 'AnalyticsTab', label: 'Analytics', icon: 'trending-up' },
-    { path: 'GSTTab', label: 'GST & ITR', icon: 'bank' },
-    { path: 'WhatsAppTab', label: 'WhatsApp Desk', icon: 'message' },
+    { path: 'BillingTab', label: t('navBilling'), icon: 'store' },
+    { path: 'ProductsTab', label: t('navProducts'), icon: 'package' },
+    { path: 'CustomersTab', label: t('navCustomers'), icon: 'account-group' },
+    { path: 'RecoveryTab', label: t('navRecovery'), icon: 'phone' },
+    { path: 'RecordsTab', label: t('navRecords'), icon: 'book-open-variant' },
+    { path: 'KhataTab', label: t('navUdhaar'), icon: 'credit-card' },
+    { path: 'DealsTab', label: t('navGroupBuy'), icon: 'gift' },
+    { path: 'AnalyticsTab', label: t('navAnalytics'), icon: 'trending-up' },
+    { path: 'GSTTab', label: t('navGst'), icon: 'bank' },
+    { path: 'WhatsAppTab', label: t('navWhatsapp'), icon: 'message' },
   ];
 
   const confirmLogout = () => {
@@ -69,8 +66,8 @@ function DashboardHeader() {
           </TouchableOpacity>
           <Text style={[styles.brand, { color: colors.text }]}>SDukaan</Text>
           <View style={styles.headerRight}>
-            <TouchableOpacity onPress={toggleLanguage} style={[styles.langBtn, { borderColor: colors.border }]}>
-              <Text style={[styles.langText, { color: colors.textSecondary }]}>{language.toUpperCase()}</Text>
+            <TouchableOpacity onPress={() => setShowLangPicker(true)} style={[styles.langBtn, { borderColor: colors.border }]}>
+              <Text style={[styles.langText, { color: colors.textSecondary }]}>{lang}</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => setShowMenu(true)} style={[styles.menuBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }]}>
               <MaterialCommunityIcons name="menu" size={22} color={colors.textSecondary} />
@@ -84,7 +81,7 @@ function DashboardHeader() {
         <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={() => setShowMenu(false)}>
           <View style={[styles.menuModal, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
             <View style={[styles.menuHeader, { borderBottomColor: colors.border }]}>
-              <Text style={[styles.menuTitle, { color: colors.textSecondary }]}>Menu</Text>
+              <Text style={[styles.menuTitle, { color: colors.textSecondary }]}>{t('menuTitle')}</Text>
               <TouchableOpacity onPress={() => setShowMenu(false)}>
                 <MaterialCommunityIcons name="close" size={16} color={colors.textSecondary} />
               </TouchableOpacity>
@@ -99,14 +96,14 @@ function DashboardHeader() {
               {/* Theme Toggle */}
               <TouchableOpacity style={styles.menuItem} onPress={toggleTheme}>
                 <MaterialCommunityIcons name={isDark ? 'weather-sunny' : 'weather-night'} size={18} color={colors.textSecondary} />
-                <Text style={[styles.menuItemText, { color: colors.text }]}>{isDark ? 'Light Mode' : 'Dark Mode'}</Text>
+                <Text style={[styles.menuItemText, { color: colors.text }]}>{isDark ? t('lightMode') : t('darkMode')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.menuItem, { marginTop: spacing.xs }]}
                 onPress={() => { setShowMenu(false); setShowLogoutConfirm(true); }}
               >
                 <MaterialCommunityIcons name="logout" size={18} color="#EF4444" />
-                <Text style={[styles.menuItemText, { color: '#EF4444' }]}>Sign Out</Text>
+                <Text style={[styles.menuItemText, { color: '#EF4444' }]}>{t('signOut')}</Text>
               </TouchableOpacity>
             </ScrollView>
           </View>
@@ -120,15 +117,15 @@ function DashboardHeader() {
             <View style={styles.logoutIcon}>
               <MaterialCommunityIcons name="logout" size={36} color="#EF4444" />
             </View>
-            <Text style={[styles.logoutTitle, { color: colors.text }]}>Ready to leave?</Text>
+            <Text style={[styles.logoutTitle, { color: colors.text }]}>{t('logoutTitle')}</Text>
             <Text style={[styles.logoutSubtitle, { color: colors.textSecondary }]}>
-              Log out from <Text style={{ fontWeight: '900', color: colors.text }}>SDukaan</Text>?
+              {t('logoutSubtitle')}<Text style={{ fontWeight: '900', color: colors.text }}>SDukaan</Text>?
             </Text>
             <TouchableOpacity style={styles.logoutBtn} onPress={confirmLogout}>
-              <Text style={styles.logoutBtnText}>Sign Out Now</Text>
+              <Text style={styles.logoutBtnText}>{t('signOutNow')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.cancelBtn, { backgroundColor: isDark ? '#1F2937' : '#F3F4F6' }]} onPress={() => setShowLogoutConfirm(false)}>
-              <Text style={[styles.cancelBtnText, { color: colors.textSecondary }]}>Stay Logged In</Text>
+              <Text style={[styles.cancelBtnText, { color: colors.textSecondary }]}>{t('stayLoggedIn')}</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -139,10 +136,11 @@ function DashboardHeader() {
 
 function PlaceholderScreen({ label }: { label?: string }) {
   const { colors } = useTheme();
+  const { t } = useLanguage();
   return (
     <View style={[styles.placeholder, { backgroundColor: colors.background }]}>
       <MaterialCommunityIcons name="hammer-wrench" size={48} color={colors.textMuted} />
-      <Text style={{ color: colors.textMuted, marginTop: spacing.sm }}>{label || 'Coming Soon'}</Text>
+      <Text style={{ color: colors.textMuted, marginTop: spacing.sm }}>{label || t('comingSoon')}</Text>
     </View>
   );
 }
@@ -265,6 +263,7 @@ export default function App() {
         <ToastProvider>
           <AuthProvider>
             <AppNavigator />
+            <GlobalLanguageModal />
           </AuthProvider>
         </ToastProvider>
       </ThemeProvider>

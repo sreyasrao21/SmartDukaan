@@ -1,7 +1,10 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 'react-native';
+import React, { useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Animated } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
+import { useLanguage } from '../contexts/LanguageContext';
+import { useAuth } from '../contexts/AuthContext';
 
 import { useWindowDimensions } from 'react-native';
 
@@ -30,14 +33,15 @@ const CATS = [
 
 const BillingProductCard = React.memo(({ product, cardWidth }: any) => {
   const { colors } = useTheme();
+  const { t } = useLanguage();
   const isOutOfStock = product.stock <= 0;
   const lowStock = product.stock <= 3 && product.stock > 0;
 
   let badgeText = '';
   let badgeBg = '#10B981';
-  if (lowStock) { badgeText = 'Low Stock'; badgeBg = '#EF4444'; }
-  else if (product.price > 300) { badgeText = 'Premium'; badgeBg = '#1F2937'; }
-  else { badgeText = 'Popular'; badgeBg = '#10B981'; }
+  if (lowStock) { badgeText = t('lowStock'); badgeBg = '#EF4444'; }
+  else if (product.price > 300) { badgeText = t('premium'); badgeBg = '#1F2937'; }
+  else { badgeText = t('popular'); badgeBg = '#10B981'; }
 
   return (
     <View style={[s.card, isOutOfStock && s.cardOutOfStock, { width: cardWidth }]}>
@@ -58,12 +62,12 @@ const BillingProductCard = React.memo(({ product, cardWidth }: any) => {
       </View>
       {!isOutOfStock && (
         <TouchableOpacity style={s.addBtn}>
-          <Text style={s.addBtnText}>ADD</Text>
+          <Text style={s.addBtnText}>{t('add')}</Text>
         </TouchableOpacity>
       )}
       {isOutOfStock && (
         <View style={s.soldOutBadge}>
-          <Text style={s.soldOutText}>SOLD OUT</Text>
+          <Text style={s.soldOutText}>{t('soldOut')}</Text>
         </View>
       )}
     </View>
@@ -74,10 +78,20 @@ export default function HomeScreen() {
   const { width } = useWindowDimensions();
   const cardWidth = (width - 48) / 2;
   const { isDark } = useTheme();
+  const { t } = useLanguage();
+  const { user } = useAuth();
   const [search, setSearch] = React.useState('');
   const [selectedCat, setSelectedCat] = React.useState(0);
 
-  const categories = CATS;
+  const categories = [
+    { key: 'All', label: t('all'), icon: '🛍️' },
+    { key: 'Grocery', label: t('grocery'), icon: '🛒' },
+    { key: 'Dairy', label: t('dairy'), icon: '🥛' },
+    { key: 'Beverages', label: t('beverages'), icon: '🧃' },
+    { key: 'Snacks', label: t('snacks'), icon: '🍿' },
+    { key: 'Household', label: t('household'), icon: '🧹' },
+    { key: 'Personal Care', label: t('personalCare'), icon: '🧴' },
+  ];
   const activeCat = categories[selectedCat]?.key || 'All';
 
   const filtered = PRODUCTS.filter(p => {
@@ -86,19 +100,41 @@ export default function HomeScreen() {
     return matchSearch && matchCat;
   });
 
+  const HEADER_HEIGHT = 280;
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const clampedScroll = Animated.diffClamp(scrollY, 0, HEADER_HEIGHT);
+  const headerTranslateY = clampedScroll.interpolate({
+    inputRange:  [0, HEADER_HEIGHT],
+    outputRange: [0, -HEADER_HEIGHT],
+    extrapolate: 'clamp',
+  });
+
   return (
     <View style={[s.container, { backgroundColor: isDark ? '#111827' : '#FFFFFF' }]}>
-      <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
-        {/* Gradient Header */}
-        <View style={[s.header, { backgroundColor: '#FCD34D' }]}>
+      <Animated.View style={[s.headerWrapper, { transform: [{ translateY: headerTranslateY }] }]}>
+        <LinearGradient
+          colors={['#FFD200', '#FF7E06']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={s.orangeHeaderBase}
+        >
           {/* Greeting */}
           <View style={s.greetingRow}>
-            <Text style={s.greeting}>Hey Tester! 👋</Text>
+            <Text style={s.greeting}>
+              {user?.name 
+                ? t('greeting')
+                    .replace('Tester', user.name)
+                    .replace('टेस्टर', user.name)
+                    .replace('టెస్టర్', user.name)
+                    .replace('டெஸ்டர்', user.name)
+                    .replace('ಟೆಸ್ಟರ್', user.name)
+                : t('greeting')}
+            </Text>
             <View style={s.avatarSmall}>
               <MaterialCommunityIcons name="account" size={16} color="#000" />
             </View>
           </View>
-          <Text style={s.tapToAdd}>Tap to add</Text>
+          <Text style={s.tapToAdd}>Billing</Text>
 
           {/* Search */}
           <View style={s.searchRow}>
@@ -106,7 +142,7 @@ export default function HomeScreen() {
               <MaterialCommunityIcons name="magnify" size={20} color="#9CA3AF" />
               <TextInput
                 style={s.searchInput}
-                placeholder="Search products..."
+                placeholder={t('searchProducts')}
                 placeholderTextColor="#9CA3AF"
                 value={search}
                 onChangeText={setSearch}
@@ -134,17 +170,24 @@ export default function HomeScreen() {
                 >
                   <Text style={isActive ? s.chipIconActive : s.chipIcon}>{cat.icon}</Text>
                   <Text style={[s.chipText, { color: isActive ? '#FFFFFF' : '#1F2937' }]}>
-                    {cat.key === 'All' ? 'All' : cat.key}
+                    {cat.label}
                   </Text>
                 </TouchableOpacity>
               );
             })}
           </ScrollView>
+        </LinearGradient>
+      </Animated.View>
 
-          {/* Fade gradient at bottom of header */}
-          <View style={[s.headerFade, { backgroundColor: isDark ? '#111827' : '#FFFFFF' }]} />
-        </View>
-
+      <Animated.ScrollView 
+        contentContainerStyle={[s.scroll, { paddingTop: HEADER_HEIGHT + 24 }]} 
+        showsVerticalScrollIndicator={false}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: true }
+        )}
+        scrollEventThrottle={16}
+      >
         {/* Products Grid */}
         <View style={s.gridSection}>
           <View style={s.grid}>
@@ -159,7 +202,7 @@ export default function HomeScreen() {
             )}
           </View>
         </View>
-      </ScrollView>
+      </Animated.ScrollView>
     </View>
   );
 }
@@ -167,7 +210,26 @@ export default function HomeScreen() {
 const s = StyleSheet.create({
   container: { flex: 1 },
   scroll: { paddingBottom: 160 },
-  header: { paddingTop: 50, paddingBottom: 0, position: 'relative' },
+  headerWrapper: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 100,
+    borderBottomLeftRadius: 36,
+    borderBottomRightRadius: 36,
+    shadowColor: '#FF7E06',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  orangeHeaderBase: {
+    paddingTop: 50,
+    paddingBottom: 24,
+    borderBottomLeftRadius: 36,
+    borderBottomRightRadius: 36,
+  },
   greetingRow: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingHorizontal: 16, marginBottom: 12, paddingTop: 8,
@@ -199,11 +261,7 @@ const s = StyleSheet.create({
   chipText: { fontSize: 11, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1 },
   chipIcon: { fontSize: 14 },
   chipIconActive: { fontSize: 14, transform: [{ scale: 1.25 }] },
-  headerFade: {
-    position: 'absolute', left: 0, right: 0, bottom: 0, height: 60,
-    opacity: 0.95,
-  },
-  gridSection: { paddingHorizontal: 12, marginTop: -24, zIndex: 10 },
+  gridSection: { paddingHorizontal: 12, zIndex: 10 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   card: {
     backgroundColor: 'rgba(254,249,195,0.8)',
